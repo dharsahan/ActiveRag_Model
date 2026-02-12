@@ -26,7 +26,7 @@ def test_high_confidence(mock_openai_cls):
         json.dumps({"confidence": 0.95, "reasoning": "Common knowledge"})
     )
 
-    config = Config(openai_api_key="test-key", confidence_threshold=0.7)
+    config = Config(confidence_threshold=0.7)
     checker = ConfidenceChecker(config)
     result = checker.check("What is 2+2?")
 
@@ -42,7 +42,7 @@ def test_low_confidence(mock_openai_cls):
         json.dumps({"confidence": 0.2, "reasoning": "Obscure topic"})
     )
 
-    config = Config(openai_api_key="test-key", confidence_threshold=0.7)
+    config = Config(confidence_threshold=0.7)
     checker = ConfidenceChecker(config)
     result = checker.check("What was the weather in Tokyo on Jan 1 1823?")
 
@@ -58,7 +58,7 @@ def test_malformed_json_defaults_to_low(mock_openai_cls):
         "not json at all"
     )
 
-    config = Config(openai_api_key="test-key", confidence_threshold=0.7)
+    config = Config(confidence_threshold=0.7)
     checker = ConfidenceChecker(config)
     result = checker.check("anything")
 

@@ -29,7 +29,10 @@ class AnswerGenerator:
 
     def __init__(self, config: Config) -> None:
         self._config = config
-        self._client = OpenAI(api_key=config.openai_api_key)
+        self._client = OpenAI(
+            base_url=config.ollama_base_url,
+            api_key="ollama",
+        )
 
     # ------------------------------------------------------------------
     # Generate Answer Directly  (High Confidence path)

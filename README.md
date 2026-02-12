@@ -47,23 +47,24 @@ requirements.txt
 # Install dependencies
 pip install -r requirements.txt
 
-# Set your OpenAI API key
-export OPENAI_API_KEY="sk-..."
+# Install and start Ollama (https://ollama.com)
+# Then pull a model:
+ollama pull llama3.2
 ```
 
 ### Configuration
 
 All settings can be configured via environment variables or a `.env` file:
 
-| Variable               | Default         | Description                                        |
-|------------------------|-----------------|----------------------------------------------------|
-| `OPENAI_API_KEY`       | *(required)*    | OpenAI API key                                     |
-| `MODEL_NAME`           | `gpt-3.5-turbo` | LLM model name                                    |
-| `CONFIDENCE_THRESHOLD` | `0.7`           | Minimum confidence to skip RAG (0.0–1.0)           |
-| `CHROMA_PERSIST_DIR`   | `./chroma_db`   | ChromaDB persistence directory                     |
-| `COLLECTION_NAME`      | `active_rag`    | ChromaDB collection name                           |
-| `TOP_K`                | `3`             | Number of documents to retrieve                    |
-| `MAX_SEARCH_RESULTS`   | `3`             | Maximum web search results                         |
+| Variable               | Default                          | Description                                        |
+|------------------------|----------------------------------|----------------------------------------------------|
+| `OLLAMA_BASE_URL`      | `http://localhost:11434/v1`      | Ollama API base URL (OpenAI-compatible endpoint)   |
+| `MODEL_NAME`           | `llama3.2`                       | Ollama model name                                  |
+| `CONFIDENCE_THRESHOLD` | `0.7`                            | Minimum confidence to skip RAG (0.0–1.0)           |
+| `CHROMA_PERSIST_DIR`   | `./chroma_db`                    | ChromaDB persistence directory                     |
+| `COLLECTION_NAME`      | `active_rag`                     | ChromaDB collection name                           |
+| `TOP_K`                | `3`                              | Number of documents to retrieve                    |
+| `MAX_SEARCH_RESULTS`   | `3`                              | Maximum web search results                         |
 
 ## Usage
 
@@ -84,7 +85,7 @@ python main.py
 ```python
 from active_rag import ActiveRAGPipeline, Config
 
-config = Config(openai_api_key="sk-...")
+config = Config()  # Uses Ollama at localhost:11434 by default
 pipeline = ActiveRAGPipeline(config)
 result = pipeline.run("What is quantum computing?")
 

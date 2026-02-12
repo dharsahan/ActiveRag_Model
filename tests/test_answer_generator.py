@@ -25,7 +25,7 @@ def test_generate_direct(mock_openai_cls):
         "The answer is 42."
     )
 
-    config = Config(openai_api_key="test-key")
+    config = Config()
     generator = AnswerGenerator(config)
     answer = generator.generate_direct("What is the meaning of life?")
 
@@ -42,7 +42,7 @@ def test_generate_with_citations(mock_openai_cls):
         "Python is great (source: python.org)."
     )
 
-    config = Config(openai_api_key="test-key")
+    config = Config()
     generator = AnswerGenerator(config)
     context = [
         RetrievalResult(

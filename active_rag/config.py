@@ -12,12 +12,14 @@ load_dotenv()
 class Config:
     """Configuration for the Active RAG pipeline."""
 
-    # OpenAI / LLM settings
-    openai_api_key: str = field(
-        default_factory=lambda: os.getenv("OPENAI_API_KEY", "")
+    # Ollama / LLM settings
+    ollama_base_url: str = field(
+        default_factory=lambda: os.getenv(
+            "OLLAMA_BASE_URL", "http://localhost:11434/v1"
+        )
     )
     model_name: str = field(
-        default_factory=lambda: os.getenv("MODEL_NAME", "gpt-3.5-turbo")
+        default_factory=lambda: os.getenv("MODEL_NAME", "llama3.2")
     )
 
     # Confidence threshold (0.0–1.0). Scores at or above this value are

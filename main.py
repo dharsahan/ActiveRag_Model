@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 
 from active_rag.config import Config
 from active_rag.pipeline import ActiveRAGPipeline
@@ -31,13 +30,6 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     config = Config()
-    if not config.openai_api_key:
-        print(
-            "Error: OPENAI_API_KEY is not set. "
-            "Export it as an environment variable or add it to a .env file.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
 
     pipeline = ActiveRAGPipeline(config)
 

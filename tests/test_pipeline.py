@@ -35,7 +35,7 @@ def test_high_confidence_path(mock_conf_openai, mock_ans_openai):
         _mock_openai_response("Direct answer here.")
     )
 
-    config = Config(openai_api_key="test-key", confidence_threshold=0.7)
+    config = Config(confidence_threshold=0.7)
     pipeline = ActiveRAGPipeline(config)
     result = pipeline.run("What is 2+2?")
 
@@ -68,7 +68,7 @@ def test_low_confidence_empty_store_triggers_web_search(
     # Mock web search to return no results (to avoid real HTTP calls)
     mock_ddgs_cls.return_value.text.return_value = []
 
-    config = Config(openai_api_key="test-key", confidence_threshold=0.7)
+    config = Config(confidence_threshold=0.7)
     pipeline = ActiveRAGPipeline(config)
     result = pipeline.run("Some obscure question")
 
