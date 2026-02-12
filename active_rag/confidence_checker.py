@@ -6,6 +6,7 @@ or whether there is a risk of hallucination / "don't know" scenario.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from openai import OpenAI
@@ -42,8 +43,6 @@ class ConfidenceChecker:
 
     def check(self, query: str) -> ConfidenceResult:
         """Return a confidence assessment for the given *query*."""
-        import json
-
         response = self._client.chat.completions.create(
             model=self._config.model_name,
             messages=[

@@ -16,7 +16,8 @@ class _SimpleEmbeddingFunction(chromadb.EmbeddingFunction):
         embeddings = []
         for text in input:
             digest = hashlib.sha256(text.encode()).digest()
-            vec = [float(b) / 255.0 for b in digest[:64]]
+            # Repeat digest to produce a 64-dimensional vector
+            vec = [float(b) / 255.0 for b in (digest + digest)]
             embeddings.append(vec)
         return embeddings
 
