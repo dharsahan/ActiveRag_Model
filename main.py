@@ -5,9 +5,41 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
+
+import httpx
 
 from active_rag.config import Config
 from active_rag.pipeline import ActiveRAGPipeline
+
+
+def _check_ollama(config: Config) -> None:
+    """Verify that the Ollama server is reachable before running queries."""
+    # Strip the /v1 suffix to hit the Ollama root health endpoint.
+    base = config.ollama_base_url.rstrip("/")
+    if base.endswith("/v1"):
+        base = base[:-3]
+    try:
+        resp = httpx.get(f"{base}/", timeout=5)
+        resp.raise_for_status()
+    except (httpx.ConnectError, httpx.TimeoutException):
+        print(
+            "Error: Cannot connect to Ollama at "
+            f"{config.ollama_base_url}\n\n"
+            "Make sure Ollama is installed and running:\n"
+            "  1. Install Ollama   → https://ollama.com\n"
+            f"  2. Pull a model     → ollama pull {config.model_name}\n"
+            "  3. Start the server → ollama serve\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except httpx.HTTPStatusError as exc:
+        print(
+            f"Error: Ollama returned HTTP {exc.response.status_code} "
+            f"at {config.ollama_base_url}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -30,6 +62,7 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     config = Config()
+    _check_ollama(config)
 
     pipeline = ActiveRAGPipeline(config)
 

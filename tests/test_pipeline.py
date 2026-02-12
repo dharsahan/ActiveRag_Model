@@ -3,6 +3,8 @@
 import json
 from unittest.mock import MagicMock, patch
 
+from openai import APIConnectionError
+
 from active_rag.config import Config
 from active_rag.pipeline import ActiveRAGPipeline
 
@@ -75,3 +77,22 @@ def test_low_confidence_empty_store_triggers_web_search(
     assert result.path == "rag_web"
     assert result.confidence is not None
     assert result.confidence.is_high_confidence is False
+
+
+@patch("active_rag.answer_generator.OpenAI")
+@patch("active_rag.confidence_checker.OpenAI")
+def test_connection_error_returns_error_result(mock_conf_openai, mock_ans_openai):
+    """Pipeline returns a friendly error when Ollama is unreachable."""
+    mock_conf_client = MagicMock()
+    mock_conf_openai.return_value = mock_conf_client
+    mock_conf_client.chat.completions.create.side_effect = APIConnectionError(
+        request=MagicMock()
+    )
+
+    config = Config(confidence_threshold=0.7)
+    pipeline = ActiveRAGPipeline(config)
+    result = pipeline.run("anything")
+
+    assert result.path == "error"
+    assert result.answer.source == "error"
+    assert "Could not connect to Ollama" in result.answer.text

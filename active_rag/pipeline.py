@@ -31,6 +31,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from openai import APIConnectionError
+
 from active_rag.answer_generator import Answer, AnswerGenerator
 from active_rag.confidence_checker import ConfidenceChecker, ConfidenceResult
 from active_rag.config import Config
@@ -63,6 +65,29 @@ class ActiveRAGPipeline:
 
     def run(self, query: str) -> PipelineResult:
         """Execute the full Active RAG pipeline for the given *query*."""
+        try:
+            return self._run(query)
+        except APIConnectionError:
+            logger.error(
+                "Cannot connect to Ollama at %s. "
+                "Is the server running? (ollama serve)",
+                self._config.ollama_base_url,
+            )
+            return PipelineResult(
+                answer=Answer(
+                    text=(
+                        "Error: Could not connect to Ollama. "
+                        "Please make sure Ollama is running "
+                        "(ollama serve) and try again."
+                    ),
+                    citations=[],
+                    source="error",
+                ),
+                path="error",
+            )
+
+    def _run(self, query: str) -> PipelineResult:
+        """Internal pipeline logic."""
         # ── Step 1: AI Model Confidence Check ────────────────────────
         confidence = self._confidence_checker.check(query)
         logger.info(
