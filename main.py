@@ -116,6 +116,10 @@ def main(argv: list[str] | None = None) -> None:
         help="Ingest local files (PDF, TXT, MD, DOCX) into the vector store.",
     )
     parser.add_argument(
+        "--agent", action="store_true",
+        help="Launch the Autonomous Agent (Tool-Calling ReAct loop) instead of the static pipeline.",
+    )
+    parser.add_argument(
         "--serve", action="store_true",
         help="Start the REST API server (FastAPI).",
     )
@@ -223,11 +227,39 @@ def main(argv: list[str] | None = None) -> None:
     with status_spinner("Checking LLM connection..."):
         _check_llm_backend(config)
 
-    # Create pipeline with features
     def progress_callback(msg: str) -> None:
         if args.verbose:
             print_info(msg)
 
+    # Agent Execution Mode
+    if args.agent:
+        from active_rag.agent import AgenticOrchestrator
+        from active_rag.console import console
+        agent = AgenticOrchestrator(config, progress_callback=progress_callback)
+        
+        if args.query:
+            result = agent.run("You are a helpful AI Assistant with access to tools.", args.query)
+            console.print(f"\n[green]Agent final answer:[/green] {result}")
+        else:
+            print_info("Starting Agent Interactive Mode! (Type 'exit' or 'quit' to end)")
+            from rich.prompt import Prompt
+            while True:
+                try:
+                    user_input = Prompt.ask("\n[bold blue]You[/bold blue]")
+                    if not user_input.strip():
+                        continue
+                    if user_input.lower() in ["exit", "quit", "bye"]:
+                        print_success("Goodbye!")
+                        break
+                    
+                    result = agent.run("You are a helpful AI Assistant with access to tools.", user_input)
+                    console.print(f"\n[bold magenta]Agent:[/bold magenta] {result}")
+                    
+                except KeyboardInterrupt:
+                    break
+        return
+
+    # Static Pipeline Execution Mode
     pipeline = ActiveRAGPipeline(
         config,
         enable_cache=not args.no_cache,
