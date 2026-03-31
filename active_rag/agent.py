@@ -14,6 +14,8 @@ from active_rag.answer_generator import Answer
 from active_rag.tools.calculator import TOOL_SCHEMA as CALC_SCHEMA, execute as execute_calc
 from active_rag.tools.web_browser import WebBrowserTool
 from active_rag.tools.vector_database import VectorDatabaseTool
+from active_rag.tools.store_memory import StoreMemoryTool
+from active_rag.tools.list_memory import ListMemoryTool
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +34,15 @@ class AgenticOrchestrator:
         # Initialize tools
         self._web_tool = WebBrowserTool(self._config)
         self._vector_tool = VectorDatabaseTool(self._config)
+        self._store_tool = StoreMemoryTool(self._config)
+        self._list_tool = ListMemoryTool(self._config)
         
         self.tools_schema = [
             CALC_SCHEMA,
             self._web_tool.schema,
             self._vector_tool.schema,
+            self._store_tool.schema,
+            self._list_tool.schema,
         ]
         
     def _execute_tool(self, name: str, args: str) -> str:
@@ -53,6 +59,10 @@ class AgenticOrchestrator:
             return self._web_tool.execute(parsed_args)
         elif name == "query_memory":
             return self._vector_tool.execute(parsed_args)
+        elif name == "store_memory":
+            return self._store_tool.execute(parsed_args)
+        elif name == "list_memory":
+            return self._list_tool.execute(parsed_args)
         else:
             return f"Error: Unknown tool '{name}'"
 
