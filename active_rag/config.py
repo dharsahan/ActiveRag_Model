@@ -13,20 +13,29 @@ class Config:
     """Configuration for the Active RAG pipeline."""
 
     # Ollama / LLM settings
-    ollama_base_url: str = field(
-        default_factory=lambda: os.getenv(
-            "OLLAMA_BASE_URL", "https://integrate.api.nvidia.com/v1"
-        )
+    provider: str = field(
+        default_factory=lambda: os.getenv("LLM_PROVIDER", "nvidia").lower()
     )
-    model_name: str = field(
-        default_factory=lambda: os.getenv("MODEL_NAME", "stepfun-ai/step-3.5-flash")
-    )
-    api_key: str = field(
-        default_factory=lambda: os.getenv(
-            "LLM_API_KEY",
-            os.getenv("NVIDIA_API_KEY", os.getenv("OPENAI_API_KEY", "ollama"))
-        )
-    )
+    ollama_base_url: str | None = None
+    model_name: str | None = None
+    api_key: str | None = None
+
+    def __post_init__(self) -> None:
+        from active_rag.providers import get_provider_config
+        cfg = get_provider_config(self.provider)
+        
+        if self.ollama_base_url is None:
+            self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", cfg["base_url"])
+            
+        if self.model_name is None:
+            self.model_name = os.getenv("MODEL_NAME", cfg["default_model"])
+            
+        if self.api_key is None:
+            if "api_key_env" in cfg:
+                default_key = os.getenv(cfg["api_key_env"], "ollama")
+            else:
+                default_key = cfg.get("api_key", "ollama")
+            self.api_key = os.getenv("LLM_API_KEY", default_key)
 
     # Confidence threshold (0.0–1.0). Scores at or above this value are
     # considered "high confidence" and skip RAG retrieval.

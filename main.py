@@ -119,6 +119,12 @@ def main(argv: list[str] | None = None) -> None:
         "--serve", action="store_true",
         help="Start the REST API server (FastAPI).",
     )
+    
+    db_group = parser.add_argument_group("Vector Store Management")
+    db_group.add_argument("--db-stats", action="store_true", help="Show vector store statistics.")
+    db_group.add_argument("--db-search", type=str, help="Search the vector store for a query.")
+    db_group.add_argument("--db-clear", action="store_true", help="Clear all documents from vector store.")
+    db_group.add_argument("--db-export", type=str, help="Export vector store contents to JSON file.")
     args = parser.parse_args(argv)
 
     # Configure logging
@@ -141,6 +147,46 @@ def main(argv: list[str] | None = None) -> None:
         cache.clear()
         print_success("Cache cleared!")
         return
+
+    # Handle Vector Store Management
+    if args.db_stats or args.db_search or args.db_clear or args.db_export:
+        from active_rag.vector_store import VectorStore
+        store = VectorStore(config)
+        
+        if args.db_stats:
+            count = store._collection.count()
+            print_info(f"Documents: {count}")
+            print_info(f"Collection: {config.collection_name}")
+            print_info(f"Persist dir: {config.chroma_persist_dir}")
+            return
+            
+        if args.db_search:
+            from active_rag.console import console
+            result = store.search(args.db_search)
+            if result.found:
+                for r in result.results:
+                    console.print(f"\n[bold]{r.source_url}[/bold] (score: {r.score:.2f})")
+                    console.print(f"[dim]{r.content[:200]}...[/dim]")
+            else:
+                print_warning("No matching documents found.")
+            return
+            
+        if args.db_clear:
+            store._client.delete_collection(config.collection_name)
+            print_success("Vector store cleared!")
+            return
+            
+        if args.db_export:
+            import json
+            all_data = store._collection.get(include=["documents", "metadatas"])
+            export = []
+            if all_data and all_data.get("documents"):
+                for doc, meta in zip(all_data["documents"], all_data["metadatas"]):
+                    export.append({"content": doc, "metadata": meta})
+            with open(args.db_export, "w") as f:
+                json.dump(export, f, indent=2)
+            print_success(f"Exported {len(export)} documents to {args.db_export}")
+            return
 
     # Handle document ingestion (no LLM needed)
     if args.ingest:
