@@ -91,38 +91,48 @@ class WebSearcher:
     # Scrape & Extract Content (with smart extraction)
     # ------------------------------------------------------------------
     def scrape(self, url: str) -> ScrapedPage | None:
-        """Fetch *url* and return its extracted text content."""
+        """Fetch *url* using a headless browser and return its extracted text content."""
+        from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
         try:
-            resp = self._session.get(url, timeout=_REQUEST_TIMEOUT)
-            resp.raise_for_status()
-        except requests.RequestException as e:
-            logger.debug("Failed to fetch URL: %s - %s", url, str(e)[:50])
+            with sync_playwright() as p:
+                # Launch headless chromium
+                browser = p.chromium.launch(headless=True)
+                
+                # Block image, media, and stylesheets for speed
+                context = browser.new_context()
+                context.route(
+                    "**/*",
+                    lambda route: route.abort()
+                    if route.request.resource_type in ["image", "media", "font", "stylesheet"]
+                    else route.continue_()
+                )
+                
+                page = context.new_page()
+                # Wait until domcontentloaded to handle basic JS
+                page.goto(url, wait_until="domcontentloaded", timeout=_REQUEST_TIMEOUT * 1000)
+                
+                # Wait a tiny bit extra for lazy-rendered text (up to 1s)
+                page.wait_for_timeout(1000)
+                
+                title = page.title()
+                
+                # Remove common noisy elements before extracting innerText
+                page.evaluate('''() => {
+                    const selectors = ['nav', 'footer', 'header', 'aside', '.ads', '#banner'];
+                    selectors.forEach(selector => {
+                        document.querySelectorAll(selector).forEach(e => e.remove());
+                    });
+                }''')
+                
+                # innerText only returns visible text (handles CSS display:none natively)
+                text = page.evaluate("document.body.innerText") or ""
+                
+                browser.close()
+                
+        except (PlaywrightTimeoutError, Exception) as e:
+            logger.debug("Failed to fetch/render URL using Playwright: %s - %s", url, str(e)[:50])
             return None
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        # Extract title
-        title = ""
-        title_tag = soup.find("title")
-        if title_tag:
-            title = title_tag.get_text(strip=True)
-
-        # Remove unwanted elements
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside", 
-                         "advertisement", "noscript", "iframe", "form"]):
-            tag.decompose()
-
-        # Try to find main content
-        main_content = None
-        for selector in ["main", "article", "[role='main']", ".content", ".post-content", "#content"]:
-            main_content = soup.select_one(selector)
-            if main_content:
-                break
-
-        if main_content:
-            text = main_content.get_text(separator="\n", strip=True)
-        else:
-            text = soup.get_text(separator="\n", strip=True)
 
         # Clean up text
         lines = [line.strip() for line in text.split("\n") if line.strip()]
