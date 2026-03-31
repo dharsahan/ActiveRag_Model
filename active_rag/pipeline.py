@@ -50,7 +50,8 @@ _TIME_SENSITIVE_KEYWORDS = [
     "current", "latest", "today", "recent", "breaking",
     "now", "this week", "this month", "new ", "news",
     "update", "happening", "right now", "2026", "yesterday",
-    "last night", "this morning", "tonight",
+    "last night", "this morning", "tonight", "price", "search online",
+    "search the web", "look up", "lookup", "google", "find online",
 ]
 
 
@@ -182,6 +183,12 @@ class ActiveRAGPipeline:
             self._progress_callback("Checking confidence...")
             confidence = self._confidence_checker.check(query)
             
+            # Step 1b: Force low confidence for time-sensitive/explicit search queries
+            time_sensitive = self._is_time_sensitive(query)
+            if time_sensitive and confidence.is_high_confidence:
+                confidence.is_high_confidence = False
+                confidence.reasoning = "Query is time-sensitive or requested search; overriding to low confidence."
+            
             yield f"__confidence__:{confidence.confidence:.2f}"
             
             if confidence.is_high_confidence:
@@ -201,7 +208,6 @@ class ActiveRAGPipeline:
                     yield answer.text
                 
             else:
-                time_sensitive = self._is_time_sensitive(query)
                 vector_result = VectorSearchResult(found=False)
 
                 if not time_sensitive:
@@ -294,6 +300,13 @@ class ActiveRAGPipeline:
         # ── Step 1: AI Model Confidence Check ────────────────────────
         self._progress_callback("Checking confidence...")
         confidence = self._confidence_checker.check(query)
+        
+        # Step 1b: Force low confidence for time-sensitive/explicit search queries
+        time_sensitive = self._is_time_sensitive(query)
+        if time_sensitive and confidence.is_high_confidence:
+            confidence.is_high_confidence = False
+            confidence.reasoning = "Query is time-sensitive or requested search; overriding to low confidence."
+            
         logger.info(
             "Confidence: %.2f (%s) – %s",
             confidence.confidence,
@@ -312,7 +325,6 @@ class ActiveRAGPipeline:
             )
 
         # ── Step 2: Check Vector Memory / RAG ────────────────────────
-        time_sensitive = self._is_time_sensitive(query)
         vector_result = VectorSearchResult(found=False)
 
         if not time_sensitive:
