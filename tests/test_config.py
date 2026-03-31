@@ -10,8 +10,8 @@ def test_default_config_values():
     assert config.top_k == 3
     assert config.max_search_results == 3
     assert config.collection_name == "active_rag"
-    assert config.model_name == "llama3.2"
-    assert config.ollama_base_url == "http://localhost:11434/v1"
+    assert config.model_name == "stepfun-ai/step-3.5-flash"
+    assert config.ollama_base_url == "https://integrate.api.nvidia.com/v1"
 
 
 def test_custom_config_values():

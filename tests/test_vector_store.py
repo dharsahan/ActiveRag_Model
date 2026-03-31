@@ -78,3 +78,44 @@ def test_add_empty_list_is_noop():
     store.add_documents(contents=[], source_urls=[])
     result = store.search("anything")
     assert result.found is False
+
+
+def test_max_age_filters_stale_documents():
+    """Documents older than max_age_seconds should be excluded from results."""
+    import time
+
+    store = _make_store()
+    store.add_documents(
+        contents=["Old news from yesterday"],
+        source_urls=["https://example.com/old"],
+    )
+
+    # Backdate the indexed_at time by patching the metadata
+    # Simulate a document indexed 2 hours ago
+    collection = store._collection
+    all_docs = collection.get(include=["metadatas"])
+    doc_id = all_docs["ids"][0]
+    old_time = time.time() - 7200  # 2 hours ago
+    collection.update(
+        ids=[doc_id],
+        metadatas=[{"source_url": "https://example.com/old", "indexed_at": old_time}],
+    )
+
+    # Search WITH max_age of 1 hour → stale doc should be excluded
+    result = store.search("Old news from yesterday", max_age_seconds=3600)
+    assert result.found is False
+
+    # Search WITHOUT max_age → stale doc should still be returned
+    result = store.search("Old news from yesterday")
+    assert result.found is True
+
+
+def test_time_sensitive_detection():
+    """Pipeline correctly detects time-sensitive queries."""
+    from active_rag.pipeline import ActiveRAGPipeline
+
+    assert ActiveRAGPipeline._is_time_sensitive("current news in USA") is True
+    assert ActiveRAGPipeline._is_time_sensitive("latest updates on elections") is True
+    assert ActiveRAGPipeline._is_time_sensitive("today's weather") is True
+    assert ActiveRAGPipeline._is_time_sensitive("What is Python?") is False
+    assert ActiveRAGPipeline._is_time_sensitive("How does photosynthesis work?") is False

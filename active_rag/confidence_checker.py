@@ -7,11 +7,20 @@ or whether there is a risk of hallucination / "don't know" scenario.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 
-from openai import OpenAI
+from openai import OpenAI, APIConnectionError, RateLimitError, APITimeoutError
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 from active_rag.config import Config
+
+logger = logging.getLogger(__name__)
 
 _CONFIDENCE_SYSTEM_PROMPT = (
     "You are a confidence evaluator. Given a user question, estimate how "
@@ -41,9 +50,15 @@ class ConfidenceChecker:
         self._config = config
         self._client = OpenAI(
             base_url=config.ollama_base_url,
-            api_key="ollama",
+            api_key=config.api_key,
         )
 
+    @retry(
+        retry=retry_if_exception_type((APIConnectionError, RateLimitError, APITimeoutError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        before_sleep=lambda rs: logger.warning("Confidence check retry %d", rs.attempt_number),
+    )
     def check(self, query: str) -> ConfidenceResult:
         """Return a confidence assessment for the given *query*."""
         response = self._client.chat.completions.create(

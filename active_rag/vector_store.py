@@ -9,6 +9,7 @@ Handles:
 from __future__ import annotations
 
 import hashlib
+import time
 import uuid
 from dataclasses import dataclass, field
 
@@ -57,11 +58,19 @@ class VectorStore:
     # ------------------------------------------------------------------
     # Check Vector Memory / RAG
     # ------------------------------------------------------------------
-    def search(self, query: str) -> VectorSearchResult:
+    def search(
+        self, query: str, min_score: float | None = None, return_all: bool = False,
+        max_age_seconds: float | None = None,
+    ) -> VectorSearchResult:
         """Search the vector store for documents relevant to *query*.
 
         Returns a ``VectorSearchResult`` indicating whether data was found
         and, if so, the matching documents with scores.
+        
+        Args:
+            query: The search query
+            min_score: Minimum similarity score (default: config threshold or 0.2)
+            return_all: If True, return all results regardless of score
         """
         if self._collection.count() == 0:
             return VectorSearchResult(found=False)
@@ -69,6 +78,7 @@ class VectorStore:
         results = self._collection.query(
             query_texts=[query],
             n_results=min(self._config.top_k, self._collection.count()),
+            include=["documents", "metadatas", "distances"],
         )
 
         items: list[RetrievalResult] = []
@@ -76,19 +86,44 @@ class VectorStore:
             documents = results["documents"][0]
             metadatas = (results["metadatas"] or [[]])[0]
             distances = (results["distances"] or [[]])[0]
+            now = time.time()
             for doc, meta, dist in zip(documents, metadatas, distances):
+                # Filter by age if max_age_seconds is set
+                if max_age_seconds is not None and meta:
+                    indexed_at = meta.get("indexed_at")
+                    if indexed_at is None or (now - float(indexed_at)) > max_age_seconds:
+                        continue  # Skip stale or un-timestamped documents
+
+                # ChromaDB default uses L2 distance. For the default embedding
+                # model (all-MiniLM-L6-v2), L2 distances typically range 0-2.
+                # Convert to similarity: closer to 0 = more similar.
+                # Using normalized formula: 1 / (1 + dist)
+                similarity = 1.0 / (1.0 + dist)
                 items.append(
                     RetrievalResult(
                         content=doc,
                         source_url=meta.get("source_url", "") if meta else "",
-                        score=1.0 - dist,  # convert distance → similarity
+                        score=similarity,
                     )
                 )
 
+        # Sort by score descending
+        items.sort(key=lambda r: r.score, reverse=True)
+        
+        # Determine threshold
+        threshold = min_score if min_score is not None else 0.2
+        
         # Consider data "found" if there is at least one result with a
         # reasonable similarity score.
-        found = any(r.score > 0.3 for r in items)
-        return VectorSearchResult(found=found, results=items if found else [])
+        found = any(r.score >= threshold for r in items)
+        
+        if return_all:
+            # Return all results, let caller decide what to use
+            return VectorSearchResult(found=found or len(items) > 0, results=items)
+        
+        # Filter to only high-quality results
+        filtered = [r for r in items if r.score >= threshold]
+        return VectorSearchResult(found=len(filtered) > 0, results=filtered)
 
     # ------------------------------------------------------------------
     # Update Vector DB (Content + Source URL)
@@ -107,8 +142,9 @@ class VectorStore:
             content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
             ids.append(f"doc-{content_hash}-{uuid.uuid4().hex[:8]}")
 
+        now = time.time()
         self._collection.add(
             documents=contents,
-            metadatas=[{"source_url": url} for url in source_urls],
+            metadatas=[{"source_url": url, "indexed_at": now} for url in source_urls],
             ids=ids,
         )
