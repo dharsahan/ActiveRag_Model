@@ -9,6 +9,8 @@ from typing import Callable, Generator
 from openai import OpenAI
 
 from active_rag.config import Config
+from active_rag.pipeline import PipelineResult
+from active_rag.answer_generator import Answer
 from active_rag.tools.calculator import TOOL_SCHEMA as CALC_SCHEMA, execute as execute_calc
 from active_rag.tools.web_browser import WebBrowserTool
 from active_rag.tools.vector_database import VectorDatabaseTool
@@ -54,11 +56,11 @@ class AgenticOrchestrator:
         else:
             return f"Error: Unknown tool '{name}'"
 
-    def run(self, sys_prompt: str, user_prompt: str, max_steps: int = 5) -> str:
+    def run(self, query: str, sys_prompt: str = "You are a helpful AI Assistant with access to tools. Always utilize them when necessary.", max_steps: int = 5) -> PipelineResult:
         """Run the agent loop synchronously until a final answer is produced."""
         messages = [
             {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "user", "content": query},
         ]
         
         for step in range(max_steps):
@@ -80,7 +82,11 @@ class AgenticOrchestrator:
             
             # If no tool calls, it is the final answer!
             if not getattr(message, "tool_calls", None) or len(message.tool_calls) == 0:
-                return message.content or ""
+                answer = message.content or ""
+                return PipelineResult(
+                    answer=Answer(text=answer, citations=[], source="agent"),
+                    path="agent",
+                )
                 
             # Execute tool calls
             for tool_call in message.tool_calls:
@@ -96,4 +102,22 @@ class AgenticOrchestrator:
                     "content": result_str,
                 })
                 
-        return "Error: Agent reached maximum steps without finding a final answer."
+        return PipelineResult(
+            answer=Answer(text="Error: Agent reached maximum steps without finding a final answer.", citations=[], source="error"),
+            path="error",
+        )
+
+    def run_stream(self, query: str) -> Generator[str | PipelineResult, None, None]:
+        """Streaming adapter for compatibility. For now, it evaluates resolving the tools and yields text final."""
+        yield "__path__:agent"
+        result = self.run(query)
+        yield result.answer.text
+        yield result
+
+    def clear_memory(self) -> None:
+        """Clear memory adapter for compatibility."""
+        pass
+
+    def clear_cache(self) -> None:
+        """Clear cache adapter for compatibility."""
+        pass

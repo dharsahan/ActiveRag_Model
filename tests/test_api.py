@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from active_rag.api import create_app
 
 
-@patch("active_rag.api.ActiveRAGPipeline")
+@patch("active_rag.api.AgenticOrchestrator")
 def test_query_endpoint(mock_pipeline_cls):
     """POST /query returns an answer."""
     mock_pipeline = MagicMock()
@@ -38,7 +38,7 @@ def test_query_endpoint(mock_pipeline_cls):
     assert data["confidence"] == 0.9
 
 
-@patch("active_rag.api.ActiveRAGPipeline")
+@patch("active_rag.api.AgenticOrchestrator")
 def test_health_endpoint(mock_pipeline_cls):
     """GET /health returns ok."""
     app = create_app()
@@ -48,7 +48,7 @@ def test_health_endpoint(mock_pipeline_cls):
     assert response.json()["status"] == "ok"
 
 
-@patch("active_rag.api.ActiveRAGPipeline")
+@patch("active_rag.api.AgenticOrchestrator")
 def test_clear_endpoints(mock_pipeline_cls):
     """POST /clear-memory and /clear-cache work."""
     mock_pipeline = MagicMock()

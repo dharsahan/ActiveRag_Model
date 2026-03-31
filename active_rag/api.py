@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from active_rag.config import Config
-from active_rag.pipeline import ActiveRAGPipeline
+from active_rag.agent import AgenticOrchestrator
 
 
 class QueryRequest(BaseModel):
@@ -38,7 +38,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    pipeline = ActiveRAGPipeline(config or Config())
+    pipeline = AgenticOrchestrator(config or Config())
 
     @app.get("/health")
     def health():

@@ -116,8 +116,8 @@ def main(argv: list[str] | None = None) -> None:
         help="Ingest local files (PDF, TXT, MD, DOCX) into the vector store.",
     )
     parser.add_argument(
-        "--agent", action="store_true",
-        help="Launch the Autonomous Agent (Tool-Calling ReAct loop) instead of the static pipeline.",
+        "--legacy-pipeline", action="store_true",
+        help="Use the fast static pipeline instead of the default Autonomous Agent.",
     )
     parser.add_argument(
         "--serve", action="store_true",
@@ -231,41 +231,16 @@ def main(argv: list[str] | None = None) -> None:
         if args.verbose:
             print_info(msg)
 
-    # Agent Execution Mode
-    if args.agent:
+    if args.legacy_pipeline:
+        pipeline = ActiveRAGPipeline(
+            config,
+            enable_cache=not args.no_cache,
+            enable_memory=not args.no_memory,
+            progress_callback=progress_callback,
+        )
+    else:
         from active_rag.agent import AgenticOrchestrator
-        from active_rag.console import console
-        agent = AgenticOrchestrator(config, progress_callback=progress_callback)
-        
-        if args.query:
-            result = agent.run("You are a helpful AI Assistant with access to tools.", args.query)
-            console.print(f"\n[green]Agent final answer:[/green] {result}")
-        else:
-            print_info("Starting Agent Interactive Mode! (Type 'exit' or 'quit' to end)")
-            from rich.prompt import Prompt
-            while True:
-                try:
-                    user_input = Prompt.ask("\n[bold blue]You[/bold blue]")
-                    if not user_input.strip():
-                        continue
-                    if user_input.lower() in ["exit", "quit", "bye"]:
-                        print_success("Goodbye!")
-                        break
-                    
-                    result = agent.run("You are a helpful AI Assistant with access to tools.", user_input)
-                    console.print(f"\n[bold magenta]Agent:[/bold magenta] {result}")
-                    
-                except KeyboardInterrupt:
-                    break
-        return
-
-    # Static Pipeline Execution Mode
-    pipeline = ActiveRAGPipeline(
-        config,
-        enable_cache=not args.no_cache,
-        enable_memory=not args.no_memory,
-        progress_callback=progress_callback,
-    )
+        pipeline = AgenticOrchestrator(config, progress_callback=progress_callback)
 
     if args.clear_memory:
         pipeline.clear_memory()
