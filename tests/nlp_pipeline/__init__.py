@@ -1,0 +1,1 @@
+# Test initialization for nlp_pipeline
