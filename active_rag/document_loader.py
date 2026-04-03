@@ -1,4 +1,4 @@
-"""Document ingestion for local files (TXT, MD, PDF, DOCX)."""
+"""Document ingestion for local files (TXT, MD, PDF, DOCX) with dual storage support."""
 
 from __future__ import annotations
 
@@ -6,6 +6,11 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List, Optional, Dict, Any
+
+from .config import Config
+from .storage.dual_storage_manager import DualStorageManager
+from .schemas.entities import ContentDomain
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +27,21 @@ class LoadedDocument:
 
 
 class DocumentLoader:
-    """Loads documents from local files for vector store ingestion."""
+    """Loads documents from local files for vector store and graph ingestion."""
 
-    def load(self, path: str) -> list[LoadedDocument]:
+    def __init__(self, config: Optional[Config] = None):
+        """Initialize DocumentLoader with optional dual storage support"""
+        self.config = config or Config()
+        self.dual_storage = None
+
+        if self.config.enable_graph_features:
+            try:
+                self.dual_storage = DualStorageManager(self.config)
+                logger.info("Dual storage manager initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize dual storage: {e}")
+
+    def load(self, path: str) -> List[LoadedDocument]:
         """Load a document from *path* and return parsed content."""
         p = Path(path)
         if not p.exists():
@@ -46,6 +63,31 @@ class DocumentLoader:
         elif ext == ".docx":
             return self._load_docx(p)
         return []
+
+    def load_and_store(self, path: str, domain: Optional[ContentDomain] = None) -> Dict[str, Any]:
+        """Load document and store in both ChromaDB and Neo4j if enabled"""
+        documents = self.load(path)
+        results = []
+
+        for doc in documents:
+            if self.dual_storage:
+                # Store in dual storage (ChromaDB + Neo4j)
+                doc_data = {
+                    "title": doc.title,
+                    "content": doc.content,
+                    "url": doc.source,
+                    "domain": domain
+                }
+                result = self.dual_storage.store_document(doc_data)
+                results.append(result)
+            else:
+                # Fallback to legacy storage (ChromaDB only would go here)
+                logger.warning("Dual storage not available, document not stored")
+
+        return {
+            "documents_processed": len(documents),
+            "storage_results": results
+        }
 
     def _load_text(self, path: Path) -> list[LoadedDocument]:
         text = path.read_text(encoding="utf-8", errors="ignore")
