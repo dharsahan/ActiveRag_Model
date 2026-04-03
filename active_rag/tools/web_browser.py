@@ -30,11 +30,28 @@ class WebBrowserTool:
         self.schema = get_schema()
         
     def execute(self, kwargs: dict) -> str:
+        """Synchronous wrapper for backward compatibility."""
         query = kwargs.get("query", "")
         if not query:
             return "Error: no query provided."
             
         pages = self._searcher.search_and_scrape(query)
+        if not pages:
+            return "No results found or pages failed to render."
+            
+        result_text = []
+        for i, p in enumerate(pages):
+            result_text.append(f"--- Source {i+1}: {p.url} ---\n{p.content[:1500]}")
+            
+        return "\n\n".join(result_text)
+
+    async def execute_async(self, kwargs: dict) -> str:
+        """Asynchronous execution for FastAPI/streaming environments."""
+        query = kwargs.get("query", "")
+        if not query:
+            return "Error: no query provided."
+            
+        pages = await self._searcher.search_and_scrape_async(query)
         if not pages:
             return "No results found or pages failed to render."
             

@@ -6,14 +6,16 @@ be indexed into the vector store.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Callable
 
 import requests
+import trafilatura
 from bs4 import BeautifulSoup
 from ddgs import DDGS
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -88,111 +90,138 @@ class WebSearcher:
         ]
 
     # ------------------------------------------------------------------
-    # Scrape & Extract Content (with smart extraction)
+    # Scrape & Extract Content (with async playwright & trafilatura)
     # ------------------------------------------------------------------
-    def scrape(self, url: str) -> ScrapedPage | None:
-        """Fetch *url* using a headless browser and return its extracted text content."""
-        from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-
+    async def scrape_async(self, url: str) -> ScrapedPage | None:
+        """Fetch *url* using async playwright and return its extracted text content."""
+        html_content = ""
+        title = ""
+        
         try:
-            with sync_playwright() as p:
-                # Launch headless chromium
-                browser = p.chromium.launch(headless=True)
+            async with async_playwright() as p:
+                async with await p.chromium.launch(headless=True) as browser:
+                    async with await browser.new_context(
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+                    ) as context:
+                        
+                        # Block noisy resources
+                        async def handle_route(route):
+                            try:
+                                if route.request.resource_type in ["image", "media", "font", "stylesheet"]:
+                                    await route.abort()
+                                else:
+                                    await route.continue_()
+                            except Exception:
+                                # Silently ignore errors if the target is already closed
+                                pass
+                        
+                        await context.route("**/*", handle_route)
+                        
+                        page = await context.new_page()
+                        try:
+                            await page.goto(url, wait_until="domcontentloaded", timeout=_REQUEST_TIMEOUT * 1000)
+                            # Wait for potential JS rendering
+                            await asyncio.sleep(1)
+                            html_content = await page.content()
+                            title = await page.title()
+                        finally:
+                            # Ensure we unroute before the context manager closes the context
+                            try:
+                                await context.unroute("**/*")
+                            except:
+                                pass
+
+                # Use trafilatura for high-quality extraction
+                extracted_text = trafilatura.extract(html_content, include_comments=False, include_tables=True)
                 
-                # Block image, media, and stylesheets for speed
-                context = browser.new_context()
-                context.route(
-                    "**/*",
-                    lambda route: route.abort()
-                    if route.request.resource_type in ["image", "media", "font", "stylesheet"]
-                    else route.continue_()
-                )
+                if not extracted_text:
+                    # Fallback to BeautifulSoup if trafilatura fails
+                    soup = BeautifulSoup(html_content, "html.parser")
+                    for s in soup(["script", "style", "nav", "footer", "header", "aside"]):
+                        s.decompose()
+                    extracted_text = soup.get_text(separator="\n")
+
+                if not extracted_text or len(extracted_text) < 100:
+                    return None
+
+                # Clean up text
+                lines = [line.strip() for line in extracted_text.split("\n") if line.strip()]
+                text = "\n".join(lines)
                 
-                page = context.new_page()
-                # Wait until domcontentloaded to handle basic JS
-                page.goto(url, wait_until="domcontentloaded", timeout=_REQUEST_TIMEOUT * 1000)
+                # Semantic chunking
+                from active_rag.chunker import TextChunker
+                chunker = TextChunker(chunk_size=2000, overlap=200)
+                chunks = chunker.chunk(text)
+                text = chunks[0] if chunks else text
                 
-                # Wait a tiny bit extra for lazy-rendered text (up to 1s)
-                page.wait_for_timeout(1000)
+                word_count = len(text.split())
+                return ScrapedPage(url=url, content=text, title=title, word_count=word_count)
                 
-                title = page.title()
-                
-                # Remove common noisy elements before extracting innerText
-                page.evaluate('''() => {
-                    const selectors = ['nav', 'footer', 'header', 'aside', '.ads', '#banner'];
-                    selectors.forEach(selector => {
-                        document.querySelectorAll(selector).forEach(e => e.remove());
-                    });
-                }''')
-                
-                # innerText only returns visible text (handles CSS display:none natively)
-                text = page.evaluate("document.body.innerText") or ""
-                
-                browser.close()
-                
-        except (PlaywrightTimeoutError, Exception) as e:
+        except Exception as e:
             logger.debug("Failed to fetch/render URL using Playwright: %s - %s", url, str(e)[:50])
             return None
 
-        # Clean up text
-        lines = [line.strip() for line in text.split("\n") if line.strip()]
-        text = "\n".join(lines)
-        
-        # Semantic chunking instead of hard truncation
-        from active_rag.chunker import TextChunker
-        chunker = TextChunker(chunk_size=2000, overlap=200)
-        chunks = chunker.chunk(text)
-        text = chunks[0] if chunks else text
-        
-        if not text.strip() or len(text) < 100:
+    def scrape(self, url: str) -> ScrapedPage | None:
+        """Synchronous wrapper for scrape_async (for backward compatibility)."""
+        try:
+            # Try to get existing loop or create new one
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            if loop.is_running():
+                # For cases where an event loop is already running (e.g. FastAPI)
+                import nest_asyncio
+                nest_asyncio.apply()
+            
+            return loop.run_until_complete(self.scrape_async(url))
+        except Exception as e:
+            logger.error(f"Sync scrape failed for {url}: {e}")
             return None
-
-        word_count = len(text.split())
-        return ScrapedPage(url=url, content=text, title=title, word_count=word_count)
-
-    def _scrape_with_progress(self, url: str, index: int, total: int) -> ScrapedPage | None:
-        """Scrape with progress reporting."""
-        self._progress_callback(f"Scraping page {index + 1}/{total}...")
-        return self.scrape(url)
 
     # ------------------------------------------------------------------
     # Parallel Search and Scrape
     # ------------------------------------------------------------------
-    def search_and_scrape(self, query: str) -> list[ScrapedPage]:
-        """Search the web for *query* and scrape all result pages in parallel."""
+    async def search_and_scrape_async(self, query: str) -> list[ScrapedPage]:
+        """Search the web for *query* and scrape all result pages concurrently."""
         results = self.search(query)
         if not results:
             return []
 
-        urls = [r["url"] for r in results]
-        pages: list[ScrapedPage] = []
+        urls = [r["url"] for r in results][:self._config.max_search_results]
+        self._progress_callback(f"Found {len(urls)} results, scraping concurrently...")
+
+        # Concurrently scrape all URLs
+        tasks = [self.scrape_async(url) for url in urls]
+        pages_raw = await asyncio.gather(*tasks)
         
-        self._progress_callback(f"Found {len(urls)} results, scraping...")
-
-        # Parallel scraping for speed
-        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
-            future_to_url = {
-                executor.submit(self._scrape_with_progress, url, i, len(urls)): url
-                for i, url in enumerate(urls)
-            }
-            
-            for future in as_completed(future_to_url):
-                url = future_to_url[future]
-                try:
-                    page = future.result()
-                    if page:
-                        pages.append(page)
-                        # Stop if we have enough good pages
-                        if len(pages) >= self._config.max_search_results:
-                            break
-                except Exception as e:
-                    logger.debug("Error scraping %s: %s", url, str(e)[:50])
-
+        pages = [p for p in pages_raw if p is not None]
+        
         # Sort by word count (prefer more content)
         pages.sort(key=lambda p: p.word_count, reverse=True)
         
         self._progress_callback(f"Successfully scraped {len(pages)} pages")
-        return pages[:self._config.max_search_results]
+        return pages
+
+    def search_and_scrape(self, query: str) -> list[ScrapedPage]:
+        """Synchronous wrapper for search_and_scrape_async."""
+        try:
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+            if loop.is_running():
+                import nest_asyncio
+                nest_asyncio.apply()
+                
+            return loop.run_until_complete(self.search_and_scrape_async(query))
+        except Exception as e:
+            logger.error(f"Sync search_and_scrape failed: {e}")
+            return []
 
     def search_urls_only(self, query: str) -> list[str]:
         """Return just URLs for backward compatibility."""

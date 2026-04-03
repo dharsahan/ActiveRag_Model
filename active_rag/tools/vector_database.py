@@ -42,3 +42,7 @@ class VectorDatabaseTool:
             snippets.append(f"[{r.source_url}]: {r.content}")
             
         return "\n\n".join(snippets)
+
+    async def execute_async(self, kwargs: dict) -> str:
+        """Asynchronous execution (already calls sync search but fits the async interface)."""
+        return self.execute(kwargs)
