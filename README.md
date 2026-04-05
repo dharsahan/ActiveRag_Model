@@ -1,101 +1,118 @@
-# ActiveRag_Model
+# Refined Active GraphRAG Agent 🧠🕸️
 
-A **Refined Active RAG (Retrieval-Augmented Generation)** system that intelligently decides whether to answer directly from the LLM or retrieve external knowledge before responding.
+An advanced **Autonomous GraphRAG Agent** that unifies vector similarity and relational reasoning into a single **Pure Neo4j architecture**. The system intelligently decides whether to answer directly, search its long-term memory, or browse the live internet—continuously learning from every interaction.
+
+## Key Features
+
+*   **Pure GraphRAG:** ChromaDB has been replaced by **Neo4j**'s native vector index. Text chunks, their embeddings, and structured entities/relationships all live in a single, unified database.
+*   **Autonomous Agent (ReAct):** Uses an Agentic Orchestrator that dynamically chooses from a suite of tools (`web_browser`, `query_memory`, `graph_query`, `calculator`) to answer complex queries.
+*   **Continuous Learning Loop:** 
+    *   **From Web:** Scraped content is automatically chunked, indexed, and enriched with extracted entities and relationships.
+    *   **From Chat:** Every user query and assistant answer is automatically indexed into memory for future recall.
+*   **Multi-Hop Reasoning:** Capable of traversing the knowledge graph to "connect the dots" across multiple entities and relationships.
+*   **Beautiful Terminal UI:** Powered by `Rich` for a polished, interactive experience with streaming tokens and status indicators.
 
 ## Architecture
 
-![Refined Active RAG Architecture](1770878008505.png)
-
-### Pipeline Flow
-
-1. **User Query** — the user asks a question.
-2. **AI Model Confidence Check** — the LLM evaluates whether it can answer the question reliably.
-   - **High Confidence** → **Generate Answer Directly** → **Final Answer to User**
-   - **Don't Know / Hallucination Risk** → proceed to step 3.
-3. **Check Vector Memory / RAG** — search the local ChromaDB vector store for relevant documents.
-   - **Data Found** → **Retrieve Context & Citations** → **Generate Answer with Citations**
-   - **Data Missing** → proceed to step 4.
-4. **Search Data Online** — use DuckDuckGo to find relevant web pages.
-5. **Scrape & Extract Content** — download and extract text from the search results.
-6. **Update Vector DB** — index the new content (with source URLs) into the vector store.
-7. **Closed Loop** — re-query the vector store, retrieve context & citations, and generate the final answer.
+```mermaid
+graph TD
+    User([User Query]) --> Agent[<b>Agentic Orchestrator</b><br/>ReAct Reasoning Loop]
+    
+    subgraph Tools [Dynamic Toolset]
+        Agent <--> Web[<b>Web Browser</b><br/>DDG + Playwright]
+        Agent <--> VectorTool[<b>query_memory</b><br/>Similarity Search]
+        Agent <--> GraphTool[<b>graph_query</b><br/>Multi-hop Logic]
+        Agent --> Store[<b>store_memory</b><br/>Fact Injection]
+        Agent --> Calc[<b>calculator</b><br/>Math Engine]
+    end
+    
+    subgraph Learning [Continuous Learning Loop]
+        Web -- 1. Scrape --> Content[Raw Text]
+        Content -- 2. Index --> Neo4jVector
+        Content -- 3. NLP Entity Extraction --> Entities[Nodes & Relations]
+        Entities -- 4. Upsert --> Neo4jGraph
+    end
+    
+    subgraph Unified Storage [Neo4j Graph Database]
+        Neo4jVector[(Vector Index)]
+        Neo4jGraph[(Knowledge Graph)]
+    end
+    
+    VectorTool <--> Neo4jVector
+    GraphTool <--> Neo4jGraph
+    Store --> Neo4jVector
+    
+    Agent --> Answer[Final Answer + Citations]
+    Answer --> User
+```
 
 ## Project Structure
 
 ```
 active_rag/
-├── __init__.py               # Package exports
-├── config.py                 # Centralized configuration (env vars / dataclass)
-├── confidence_checker.py     # AI Model Confidence Check
-├── vector_store.py           # ChromaDB vector store (search / add documents)
-├── web_search.py             # Web search + scrape & extract content
-├── answer_generator.py       # Generate answers (direct / with citations)
-└── pipeline.py               # Main orchestrator (full Active RAG flow)
-tests/
-├── test_config.py
-├── test_confidence_checker.py
-├── test_vector_store.py
-├── test_answer_generator.py
-└── test_pipeline.py
-main.py                       # CLI entry point
-requirements.txt
+├── agent.py                  # Agentic Orchestrator (Main Entry Point)
+├── vector_store.py           # Neo4j-backed Vector Store (Chunk Management)
+├── knowledge_graph/          # Neo4j Client & Graph Operations
+├── nlp_pipeline/             # Entity & Relation Extraction
+├── tools/                    # ReAct Agent Toolset (Web, Graph, Calc, etc.)
+├── web_search.py             # Playwright-based Scraper
+└── config.py                 # Centralized Configuration
+main.py                       # CLI Interface
+scripts/
+└── health_check.py           # System Diagnostics
 ```
 
 ## Setup
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+### 1. Requirements
+*   Python 3.10+
+*   Docker (for Neo4j)
+*   An LLM backend (Ollama, OpenAI, or GitHub Copilot API)
 
-# Install and start Ollama (https://ollama.com)
-# Then pull a model:
-ollama pull llama3.2
+### 2. Installation
+```bash
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+playwright install chromium
 ```
 
-### Configuration
+### 3. Start Neo4j
+```bash
+docker-compose -f docker-compose.neo4j.yml up -d
+```
 
-All settings can be configured via environment variables or a `.env` file:
+## Configuration
 
-| Variable               | Default                          | Description                                        |
-|------------------------|----------------------------------|----------------------------------------------------|
-| `OLLAMA_BASE_URL`      | `http://localhost:11434/v1`      | Ollama API base URL (OpenAI-compatible endpoint)   |
-| `MODEL_NAME`           | `llama3.2`                       | Ollama model name                                  |
-| `CONFIDENCE_THRESHOLD` | `0.7`                            | Minimum confidence to skip RAG (0.0–1.0)           |
-| `CHROMA_PERSIST_DIR`   | `./chroma_db`                    | ChromaDB persistence directory                     |
-| `COLLECTION_NAME`      | `active_rag`                     | ChromaDB collection name                           |
-| `TOP_K`                | `3`                              | Number of documents to retrieve                    |
-| `MAX_SEARCH_RESULTS`   | `3`                              | Maximum web search results                         |
+Settings are managed via a `.env` file:
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `MODEL_NAME` | `gpt-4o` | LLM model to use |
+| `OLLAMA_BASE_URL` | `http://localhost:4141/v1` | API endpoint (e.g., local proxy or Ollama) |
+| `NEO4J_URI` | `bolt://localhost:7687` | Neo4j Bolt connection string |
+| `VECTOR_INDEX_NAME` | `active_rag` | Name of the vector index in Neo4j |
+| `HEADLESS` | `true` | Set to `false` to see the browser while scraping |
 
 ## Usage
 
-### CLI — single query
-
-```bash
-python main.py "What is retrieval-augmented generation?"
-```
-
-### CLI — interactive mode
-
+### Interactive Mode (Recommended)
 ```bash
 python main.py
 ```
 
-### Programmatic
-
-```python
-from active_rag import ActiveRAGPipeline, Config
-
-config = Config()  # Uses Ollama at localhost:11434 by default
-pipeline = ActiveRAGPipeline(config)
-result = pipeline.run("What is quantum computing?")
-
-print(result.answer.text)
-print(result.path)        # "direct" | "rag_memory" | "rag_web"
-print(result.answer.citations)
+### Direct Query
+```bash
+python main.py "How is A connected to C in my family tree?"
 ```
 
-## Testing
+### Internal Commands
+*   **`/stats`**: View knowledge base size (nodes, relations, chunks).
+*   **`/health`**: Run full system diagnostics.
+*   **`/reset`**: Wipe the entire knowledge base and start fresh.
+*   **`/dump`**: See every raw text chunk learned by the agent.
+*   **`/clear`**: Clear current conversation context.
 
+## Testing
 ```bash
-python -m pytest tests/ -v
+python -m pytest tests/
 ```
