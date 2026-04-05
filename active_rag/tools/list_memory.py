@@ -18,26 +18,24 @@ def get_schema():
     }
 
 class ListMemoryTool:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, vector_store: Optional[VectorStore] = None) -> None:
         self._config = config
+        self._vector_store = vector_store
         self.schema = get_schema()
-        
+
     def execute(self, kwargs: dict) -> str:
         try:
-            # We initialize a new vector store instance purely to access the raw collection
-            store = VectorStore(self._config)
-            all_data = store._collection.get(include=["documents", "metadatas"])
+            store = self._vector_store or VectorStore(self._config)
+            all_docs = store.get_all_documents()
             
-            if not all_data or not all_data.get("documents"):
+            if not all_docs:
                 return "The database is currently completely empty."
             
-            docs = all_data["documents"]
-            metas = all_data["metadatas"]
-            
             snippets = []
-            for doc, meta in zip(docs, metas):
-                src = meta.get("source_url", "Unknown Source") if meta else "Unknown Source"
-                snippets.append(f"[{src}]: {doc}")
+            for doc_info in all_docs:
+                src = doc_info.get("source_url", "Unknown Source")
+                content = doc_info.get("content", "")
+                snippets.append(f"[{src}]: {content}")
                 
             return "Current Database Index Dump:\n\n" + "\n---\n".join(snippets)
             

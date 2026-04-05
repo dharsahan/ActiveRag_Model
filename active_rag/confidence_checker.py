@@ -69,7 +69,10 @@ class ConfidenceChecker:
             ],
             temperature=0.0,
         )
-        content = response.choices[0].message.content or "{}"
+        if response.choices:
+            content = response.choices[0].message.content or "{}"
+        else:
+            content = "{}"
         try:
             data = json.loads(content)
         except json.JSONDecodeError:

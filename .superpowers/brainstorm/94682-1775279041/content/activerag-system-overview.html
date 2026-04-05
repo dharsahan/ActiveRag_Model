@@ -1,0 +1,166 @@
+<h2>ActiveRAG System Architecture & Flow</h2>
+<p class="subtitle">Click on any component to see how it works in detail</p>
+
+<div class="mockup">
+  <div class="mockup-header">🧠 ActiveRAG System Overview</div>
+  <div class="mockup-body">
+
+    <!-- User Query Entry -->
+    <div style="text-align: center; margin: 20px 0;">
+      <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; border: 2px solid #2196f3;">
+        <h3 style="margin: 0; color: #1976d2;">👤 User Query</h3>
+        <p style="margin: 5px 0; color: #666;">"What can you tell me about Alice Smith?"</p>
+      </div>
+    </div>
+
+    <!-- Main Decision Point -->
+    <div style="text-align: center; margin: 20px 0;">
+      <div style="background: #fff3e0; padding: 15px; border-radius: 8px; border: 2px solid #ff9800;">
+        <h3 style="margin: 0; color: #f57c00;">🤖 Pipeline Router</h3>
+        <p style="margin: 5px 0; color: #666;">Selects: Legacy | Hybrid | Agentic</p>
+      </div>
+    </div>
+
+    <!-- Three Pipeline Options -->
+    <div style="display: flex; gap: 15px; margin: 20px 0;">
+
+      <!-- Legacy Pipeline -->
+      <div class="option" data-choice="legacy" onclick="toggleSelect(this)" style="flex: 1; border: 2px solid #4caf50; border-radius: 8px; padding: 15px; background: #f1f8e9;">
+        <div class="letter">1</div>
+        <div class="content">
+          <h3 style="color: #388e3c;">⚡ Legacy Pipeline</h3>
+          <p style="margin: 5px 0; font-size: 14px;">
+            <strong>Confidence Check</strong><br/>
+            • High confidence → Direct answer<br/>
+            • Low confidence → Vector search<br/>
+            • No results → Web search
+          </p>
+        </div>
+      </div>
+
+      <!-- Hybrid Pipeline -->
+      <div class="option" data-choice="hybrid" onclick="toggleSelect(this)" style="flex: 1; border: 2px solid #9c27b0; border-radius: 8px; padding: 15px; background: #fce4ec;">
+        <div class="letter">2</div>
+        <div class="content">
+          <h3 style="color: #7b1fa2;">🔀 Hybrid Pipeline</h3>
+          <p style="margin: 5px 0; font-size: 14px;">
+            <strong>Intelligent Routing</strong><br/>
+            • Query classification<br/>
+            • Vector + Graph fusion<br/>
+            • Multi-hop reasoning
+          </p>
+        </div>
+      </div>
+
+      <!-- Agentic Pipeline -->
+      <div class="option" data-choice="agentic" onclick="toggleSelect(this)" style="flex: 1; border: 2px solid #f44336; border-radius: 8px; padding: 15px; background: #ffebee;">
+        <div class="letter">3</div>
+        <div class="content">
+          <h3 style="color: #d32f2f;">🤖 Agentic Pipeline</h3>
+          <p style="margin: 5px 0; font-size: 14px;">
+            <strong>Autonomous Tools</strong><br/>
+            • Dynamic tool selection<br/>
+            • Multi-step reasoning<br/>
+            • ReAct pattern
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Storage Backends -->
+    <div style="display: flex; gap: 15px; margin: 30px 0;">
+
+      <!-- ChromaDB Vector Store -->
+      <div style="flex: 1; background: #e8f5e8; padding: 15px; border-radius: 8px; border: 2px solid #4caf50;">
+        <h3 style="margin: 0; color: #2e7d32;">🗃️ ChromaDB Vector Store</h3>
+        <p style="margin: 10px 0; font-size: 14px;">
+          • Document embeddings<br/>
+          • Semantic similarity search<br/>
+          • Conversation memory<br/>
+          • Response caching
+        </p>
+        <div style="background: white; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px;">
+          Collection: active_rag<br/>
+          Documents: Vector chunks<br/>
+          Top-K: 3 results
+        </div>
+      </div>
+
+      <!-- Neo4j Graph Database -->
+      <div style="flex: 1; background: #e3f2fd; padding: 15px; border-radius: 8px; border: 2px solid #2196f3;">
+        <h3 style="margin: 0; color: #1976d2;">🕸️ Neo4j Knowledge Graph</h3>
+        <p style="margin: 10px 0; font-size: 14px;">
+          • Entity relationships<br/>
+          • Multi-hop traversal<br/>
+          • Domain knowledge<br/>
+          • Complex reasoning
+        </p>
+        <div style="background: white; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px;">
+          Nodes: 49 (People, Docs, Concepts)<br/>
+          Relationships: 131 (MENTIONS, etc)<br/>
+          Max hops: 3
+        </div>
+      </div>
+    </div>
+
+    <!-- Current Database State -->
+    <div style="background: #f3e5f5; padding: 15px; border-radius: 8px; border: 2px solid #9c27b0; margin: 20px 0;">
+      <h3 style="margin: 0; color: #7b1fa2;">📊 Current Neo4j Database State</h3>
+      <div style="display: flex; gap: 20px; margin-top: 10px;">
+        <div style="flex: 1;">
+          <strong>Nodes (49 total):</strong><br/>
+          📄 Documents: 19<br/>
+          💡 Concepts: 16<br/>
+          👤 People: 7 (Alice Smith ✓)<br/>
+          🏢 Organizations: 4<br/>
+          🔧 Components: 3
+        </div>
+        <div style="flex: 1;">
+          <strong>Relationships (131 total):</strong><br/>
+          🔗 MENTIONS: 129<br/>
+          🤝 COLLABORATES_WITH: 1<br/>
+          🔬 RESEARCHES: 1
+        </div>
+      </div>
+    </div>
+
+    <!-- Response Generation -->
+    <div style="text-align: center; margin: 30px 0;">
+      <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; border: 2px solid #4caf50;">
+        <h3 style="margin: 0; color: #2e7d32;">📝 Response Generation</h3>
+        <p style="margin: 10px 0;">
+          <strong>Answer Generator</strong> combines:<br/>
+          • Retrieved context + citations<br/>
+          • LLM knowledge + reasoning<br/>
+          • Confidence scores + explanations
+        </p>
+      </div>
+    </div>
+
+    <!-- Final Output -->
+    <div style="text-align: center; margin: 20px 0;">
+      <div style="background: #fff3e0; padding: 15px; border-radius: 8px; border: 2px solid #ff9800;">
+        <h3 style="margin: 0; color: #f57c00;">✨ Rich Output</h3>
+        <p style="margin: 10px 0;">
+          • Formatted answer with citations<br/>
+          • Path explanation (direct/rag_memory/rag_web)<br/>
+          • Confidence metrics + reasoning<br/>
+          • Streaming support + console UI
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+  <h3>🔍 What Just Happened with "Alice Smith" Query:</h3>
+  <ol style="margin: 10px 0;">
+    <li><strong>Hybrid Pipeline Activated:</strong> Query classified for graph potential</li>
+    <li><strong>Strategy Selection:</strong> System chose "hybrid_vector" approach</li>
+    <li><strong>Graph Confidence Check:</strong> Only 10% confidence (limited Alice Smith connections)</li>
+    <li><strong>Fallback to Vector:</strong> Semantic search in ChromaDB for related content</li>
+    <li><strong>Result:</strong> No specific context found → General helpful response</li>
+    <li><strong>Explanation:</strong> System transparently explained its reasoning process</li>
+  </ol>
+</div>

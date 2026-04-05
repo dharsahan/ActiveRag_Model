@@ -3,58 +3,705 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Active RAG - Neobrutalism</title>
-    <!-- React & Babel CDN -->
+    <title>Active RAG Console</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-main: #f5f4ef;
+            --bg-panel: #fffdf6;
+            --text-main: #181717;
+            --text-soft: #4a4540;
+            --line: #1f1b19;
+            --accent-warm: #ff6b35;
+            --accent-cool: #00b3a4;
+            --accent-hot: #ff2f6e;
+            --accent-ink: #3040f2;
+            --ok: #118a5a;
+            --warn: #d47b00;
+            --idle: #5c5c5c;
+            --danger: #9e1f1f;
+            --radius: 18px;
+            --panel-shadow: 0 8px 0 rgba(31, 27, 25, 0.95);
+            --font-display: "Arial Black", "Franklin Gothic Heavy", "Impact", sans-serif;
+            --font-body: "Trebuchet MS", "Gill Sans", "Noto Sans", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Space+Grotesk', sans-serif;
-            background-color: #f0f0f0;
+            margin: 0;
+            min-height: 100vh;
+            font-family: var(--font-body);
+            color: var(--text-main);
+            background:
+                radial-gradient(circle at 12% 8%, rgba(255, 107, 53, 0.18) 0, transparent 28%),
+                radial-gradient(circle at 88% 2%, rgba(0, 179, 164, 0.2) 0, transparent 30%),
+                linear-gradient(145deg, #f3efe5 0%, #f2f4ef 50%, #efe9df 100%);
+            padding: 18px;
         }
-        .neo-brutalist-border {
-            border: 4px solid #000;
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image: linear-gradient(
+                to right,
+                rgba(31, 27, 25, 0.03) 1px,
+                transparent 1px
+            );
+            background-size: 22px 22px;
+            opacity: 0.35;
         }
-        .neo-brutalist-shadow {
-            box-shadow: 8px 8px 0px #000;
+
+        .app-shell {
+            max-width: 1120px;
+            margin: 0 auto;
+            display: grid;
+            gap: 18px;
+            position: relative;
+            z-index: 1;
         }
-        .neo-brutalist-shadow-hover:hover {
-            transform: translate(-4px, -4px);
-            box-shadow: 12px 12px 0px #000;
+
+        .panel {
+            border: 3px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--bg-panel);
+            box-shadow: var(--panel-shadow);
         }
-        .neo-brutalist-shadow-active:active {
-            transform: translate(4px, 4px);
-            box-shadow: 2px 2px 0px #000;
+
+        .hero {
+            background:
+                linear-gradient(120deg, rgba(255, 107, 53, 0.15), rgba(255, 107, 53, 0) 45%),
+                linear-gradient(240deg, rgba(0, 179, 164, 0.16), rgba(0, 179, 164, 0) 42%),
+                var(--bg-panel);
+            padding: 24px;
+            animation: riseIn 0.6s ease;
         }
-        .chat-bubble-user {
-            background-color: #FFDE03; /* Yellow */
+
+        .hero-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 12px;
         }
-        .chat-bubble-bot {
-            background-color: #00E5FF; /* Cyan */
-        }
-        .btn-action {
-            background-color: #FF4081; /* Pink */
-            color: #fff;
-            font-weight: bold;
-            transition: all 0.1s;
-        }
-        .stats-card {
-            background-color: #fff;
-        }
-        .path-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            font-weight: bold;
+
+        .hero-title {
+            margin: 0;
+            font-family: var(--font-display);
+            font-size: clamp(1.8rem, 4vw, 3rem);
+            letter-spacing: 0.04em;
             text-transform: uppercase;
-            border: 2px solid #000;
+        }
+
+        .hero-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border: 2px solid var(--line);
+            border-radius: 999px;
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            font-weight: 700;
             background: #fff;
+            white-space: nowrap;
+        }
+
+        .hero-subtitle {
+            margin: 0;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: var(--text-soft);
+        }
+
+        .top-telemetry {
+            padding: 12px;
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            background:
+                linear-gradient(90deg, rgba(48, 64, 242, 0.09), rgba(48, 64, 242, 0) 36%),
+                var(--bg-panel);
+            animation: riseIn 0.66s ease both;
+        }
+
+        .telemetry-item {
+            border: 2px solid var(--line);
+            border-radius: 12px;
+            padding: 10px;
+            background: #fff;
+            min-height: 64px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 2px;
+        }
+
+        .telemetry-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-soft);
+            font-weight: 800;
+        }
+
+        .telemetry-value {
+            font-size: 1rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+        }
+
+        .telemetry-value.live {
+            color: var(--accent-hot);
+        }
+
+        .telemetry-value.standby {
+            color: var(--idle);
+        }
+
+        .prompt-rail {
+            padding: 12px;
+            display: grid;
+            gap: 8px;
+            background:
+                linear-gradient(90deg, rgba(255, 107, 53, 0.12), rgba(255, 107, 53, 0) 44%),
+                var(--bg-panel);
+            animation: riseIn 0.72s ease both;
+        }
+
+        .prompt-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-soft);
+            font-weight: 800;
+            padding-left: 2px;
+        }
+
+        .prompt-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .prompt-chip {
+            border: 2px solid var(--line);
+            border-radius: 999px;
+            background: #fff;
+            color: var(--text-main);
+            font-weight: 700;
+            font-size: 0.82rem;
+            padding: 7px 12px;
+            cursor: pointer;
+            transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+            box-shadow: 0 3px 0 rgba(31, 27, 25, 0.92);
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .prompt-chip:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 0 rgba(31, 27, 25, 0.92);
+            background: #fff9e7;
+        }
+
+        .prompt-chip:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 rgba(31, 27, 25, 0.92);
+        }
+
+        .status-grid {
+            display: grid;
+            gap: 14px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .card {
+            padding: 16px;
+            animation: riseIn 0.7s ease both;
+        }
+
+        .card:nth-child(2) {
+            animation-delay: 0.07s;
+        }
+
+        .card:nth-child(3) {
+            animation-delay: 0.14s;
+        }
+
+        .card-title {
+            margin: 0 0 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 0.85rem;
+            font-weight: 800;
+        }
+
+        .metric-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+
+        .metric-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .metric-key {
+            color: var(--text-soft);
+        }
+
+        .metric-value {
+            font-weight: 700;
+        }
+
+        .metric-stack {
+            margin-top: 8px;
+        }
+
+        .confidence-track {
+            width: 100%;
+            height: 10px;
+            border: 2px solid var(--line);
+            border-radius: 999px;
+            background: #f2efe6;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            border-right: 2px solid rgba(31, 27, 25, 0.65);
+            background: linear-gradient(90deg, var(--accent-hot), var(--accent-warm), var(--accent-cool));
+            transition: width 0.26s ease;
+        }
+
+        .path-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 84px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 2px solid var(--line);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 0.72rem;
+            font-weight: 800;
+            background: #fff;
+        }
+
+        .path-idle {
+            color: var(--idle);
+            border-color: var(--idle);
+        }
+
+        .path-direct {
+            color: var(--ok);
+            border-color: var(--ok);
+        }
+
+        .path-rag_web,
+        .path-rag {
+            color: var(--warn);
+            border-color: var(--warn);
+        }
+
+        .path-error {
+            color: var(--danger);
+            border-color: var(--danger);
+        }
+
+        .control-stack {
+            display: grid;
+            gap: 10px;
+        }
+
+        .btn {
+            border: 3px solid var(--line);
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+            box-shadow: 0 5px 0 rgba(31, 27, 25, 0.95);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: 0 5px 0 rgba(31, 27, 25, 0.65);
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 0 rgba(31, 27, 25, 0.95);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 rgba(31, 27, 25, 0.95);
+        }
+
+        .btn-warm {
+            background: linear-gradient(135deg, #ff8a53, #ff5f3d);
+            color: #fff;
+        }
+
+        .btn-cool {
+            background: linear-gradient(135deg, #7ce7de, #2ec9bb);
+            color: #0f201f;
+        }
+
+        .chat-panel {
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: min(70vh, 680px);
+            min-height: 440px;
+            animation: riseIn 0.8s ease both;
+        }
+
+        .chat-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            padding: 14px 18px;
+            border-bottom: 3px solid var(--line);
+            background: linear-gradient(90deg, rgba(255, 107, 53, 0.15), rgba(0, 179, 164, 0.1));
+        }
+
+        .chat-title {
+            margin: 0;
+            font-family: var(--font-display);
+            font-size: 1.05rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .chat-sub {
+            margin: 4px 0 0;
+            color: var(--text-soft);
+            font-size: 0.84rem;
+        }
+
+        .stream-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--accent-hot);
+            box-shadow: 0 0 0 0 rgba(255, 47, 110, 0.6);
+            animation: pulse 1.2s infinite;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 18px;
+            display: grid;
+            gap: 14px;
+        }
+
+        .empty {
+            align-self: center;
+            justify-self: center;
+            text-align: center;
+            color: var(--text-soft);
+            padding: 20px;
+            border: 2px dashed rgba(31, 27, 25, 0.35);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.72);
+        }
+
+        .message-row {
+            display: flex;
+        }
+
+        .message-row.user {
+            justify-content: flex-end;
+        }
+
+        .message-row.bot {
+            justify-content: flex-start;
+        }
+
+        .bubble {
+            max-width: min(84%, 760px);
+            border: 3px solid var(--line);
+            border-radius: 14px;
+            padding: 12px 14px;
+            box-shadow: 0 5px 0 rgba(31, 27, 25, 0.95);
+            animation: riseIn 0.22s ease;
+        }
+
+        .bubble.user {
+            background: linear-gradient(145deg, #ffd08f, #ffc061);
+        }
+
+        .bubble.bot {
+            background: linear-gradient(145deg, #9ff4ed, #70e3d8);
+        }
+
+        .bubble-head {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(24, 23, 23, 0.7);
+            margin-bottom: 8px;
+            font-weight: 800;
+        }
+
+        .bubble-head-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .bubble-head-row .bubble-head {
+            margin-bottom: 0;
+        }
+
+        .mini-btn {
+            border: 2px solid var(--line);
+            border-radius: 999px;
+            background: #fff;
+            color: var(--text-main);
+            font-size: 0.66rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 800;
+            padding: 2px 8px;
+            cursor: pointer;
+        }
+
+        .mini-btn:hover {
+            background: #f0ecff;
+            color: var(--accent-ink);
+        }
+
+        .bubble-text {
+            margin: 0;
+            white-space: pre-wrap;
+            line-height: 1.45;
+        }
+
+        .sources {
+            margin-top: 10px;
+            border-top: 2px dashed rgba(31, 27, 25, 0.5);
+            padding-top: 10px;
+            display: grid;
+            gap: 6px;
+        }
+
+        .source-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(24, 23, 23, 0.72);
+            font-weight: 800;
+        }
+
+        .source-link {
+            color: #053d73;
+            font-size: 0.78rem;
+            line-height: 1.3;
+            text-decoration-thickness: 2px;
+            word-break: break-all;
+        }
+
+        .source-link:hover {
+            color: #03233f;
+        }
+
+        .composer {
+            border-top: 3px solid var(--line);
+            padding: 12px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.76);
+            align-items: end;
+        }
+
+        .composer-wrap {
+            display: grid;
+            gap: 6px;
+        }
+
+        .composer-textarea {
+            width: 100%;
+            border: 3px solid var(--line);
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 1rem;
+            color: var(--text-main);
+            background: #fff;
+            outline: none;
+            transition: box-shadow 0.14s ease;
+            min-height: 76px;
+            resize: vertical;
+            line-height: 1.38;
+            font-family: var(--font-body);
+        }
+
+        .composer-textarea:focus {
+            box-shadow: 0 0 0 4px rgba(0, 179, 164, 0.22);
+        }
+
+        .composer-textarea:disabled {
+            background: #f0ece5;
+        }
+
+        .composer-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-soft);
+            font-size: 0.75rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .char-meter {
+            color: var(--accent-ink);
+            font-weight: 700;
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-soft);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding-bottom: 10px;
+        }
+
+        .toast {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            border: 2px solid var(--line);
+            border-radius: 10px;
+            padding: 8px 12px;
+            background: #fff;
+            box-shadow: 0 4px 0 rgba(31, 27, 25, 0.92);
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 800;
+            z-index: 6;
+        }
+
+        @keyframes riseIn {
+            from {
+                opacity: 0;
+                transform: translateY(14px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 47, 110, 0.6);
+            }
+            70% {
+                box-shadow: 0 0 0 11px rgba(255, 47, 110, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 47, 110, 0);
+            }
+        }
+
+        @media (max-width: 980px) {
+            .top-telemetry {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .status-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .status-grid .card:nth-child(3) {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 720px) {
+            body {
+                padding: 12px;
+            }
+
+            .hero {
+                padding: 18px;
+            }
+
+            .top-telemetry {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-top {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .status-grid .card:nth-child(3) {
+                grid-column: auto;
+            }
+
+            .chat-panel {
+                height: calc(100vh - 270px);
+                min-height: 420px;
+            }
+
+            .composer {
+                grid-template-columns: 1fr;
+            }
+
+            .composer-textarea {
+                min-height: 88px;
+            }
+
+            .prompt-chip {
+                width: 100%;
+                text-align: left;
+            }
+
+            .bubble {
+                max-width: 92%;
+            }
+
+            .toast {
+                right: 12px;
+                bottom: 12px;
+            }
         }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
@@ -66,7 +713,28 @@
             const [loading, setLoading] = useState(false);
             const [stats, setStats] = useState(null);
             const [currentStreamingText, setCurrentStreamingText] = useState('');
+            const [toast, setToast] = useState('');
+            const [sessionSeconds, setSessionSeconds] = useState(0);
             const messagesEndRef = useRef(null);
+            const inputRef = useRef(null);
+
+            const quickPrompts = [
+                'Summarize today\'s top AI news in 5 bullets.',
+                'What changed in Python this month?',
+                'Explain vector reranking in simple terms.',
+                'Give me 3 sources on RAG evaluation methods.'
+            ];
+
+            const timeStamp = () =>
+                new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const formatSession = (seconds) => {
+                const mins = Math.floor(seconds / 60)
+                    .toString()
+                    .padStart(2, '0');
+                const secs = (seconds % 60).toString().padStart(2, '0');
+                return `${mins}:${secs}`;
+            };
 
             const scrollToBottom = () => {
                 messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -76,11 +744,25 @@
                 scrollToBottom();
             }, [messages, currentStreamingText]);
 
+            useEffect(() => {
+                const startedAt = Date.now();
+                const timer = setInterval(() => {
+                    setSessionSeconds(Math.floor((Date.now() - startedAt) / 1000));
+                }, 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            useEffect(() => {
+                if (!toast) return;
+                const timer = setTimeout(() => setToast(''), 1800);
+                return () => clearTimeout(timer);
+            }, [toast]);
+
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (!input.trim() || loading) return;
 
-                const userMsg = { role: 'user', text: input };
+                const userMsg = { role: 'user', text: input, time: timeStamp() };
                 setMessages(prev => [...prev, userMsg]);
                 setInput('');
                 setLoading(true);
@@ -97,20 +779,23 @@
                     
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
+                    let pending = '';
                     let botMsg = { 
                         role: 'bot', 
                         text: '',
                         citations: [],
                         path: 'retrieving...',
-                        confidence: null
+                        confidence: null,
+                        time: timeStamp()
                     };
 
                     while (true) {
                         const { value, done } = await reader.read();
                         if (done) break;
-                        
-                        const chunk = decoder.decode(value, { stream: true });
-                        const lines = chunk.split('\n');
+
+                        pending += decoder.decode(value, { stream: true });
+                        const lines = pending.split('\n');
+                        pending = lines.pop() || '';
                         
                         for (const line of lines) {
                             if (!line.trim()) continue;
@@ -124,7 +809,7 @@
                                     botMsg.path = event.path;
                                     botMsg.confidence = event.confidence;
                                     botMsg.reasoning = event.reasoning;
-                                    setStats(event);
+                                    setStats((prev) => ({ ...(prev || {}), ...event }));
                                 } else if (event.type === 'citations') {
                                     botMsg.citations = event.content;
                                 } else if (event.type === 'error') {
@@ -136,11 +821,38 @@
                             }
                         }
                     }
+
+                    if (pending.trim()) {
+                        try {
+                            const event = JSON.parse(pending);
+                            if (event.type === 'token') {
+                                botMsg.text += event.content;
+                            } else if (event.type === 'metadata') {
+                                botMsg.path = event.path;
+                                botMsg.confidence = event.confidence;
+                                botMsg.reasoning = event.reasoning;
+                                setStats((prev) => ({ ...(prev || {}), ...event }));
+                            } else if (event.type === 'citations') {
+                                botMsg.citations = event.content;
+                            } else if (event.type === 'error') {
+                                botMsg.text += ` [Error: ${event.content}]`;
+                            }
+                        } catch (e) {
+                            console.error("Error parsing final stream chunk", e);
+                        }
+                    }
                     
                     setMessages(prev => [...prev, botMsg]);
                     setCurrentStreamingText('');
                 } catch (err) {
-                    setMessages(prev => [...prev, { role: 'bot', text: 'Error: Could not reach the API.' }]);
+                    setMessages(prev => [
+                        ...prev,
+                        {
+                            role: 'bot',
+                            text: 'Error: Could not reach the API.',
+                            time: timeStamp()
+                        }
+                    ]);
                 } finally {
                     setLoading(false);
                 }
@@ -148,124 +860,270 @@
 
             const clearMemory = async () => {
                 await fetch('/clear-memory', { method: 'POST' });
-                setMessages([{ role: 'bot', text: 'Memory cleared!' }]);
+                setMessages([{ role: 'bot', text: 'Memory cleared!', time: timeStamp() }]);
             };
 
+            const applyPrompt = (text) => {
+                setInput(text);
+                inputRef.current?.focus();
+            };
+
+            const handleComposerKeyDown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (input.trim() && !loading) {
+                        handleSubmit({ preventDefault: () => {} });
+                    }
+                }
+            };
+
+            const copyMessage = async (text) => {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    setToast('Response copied');
+                } catch (error) {
+                    setToast('Clipboard unavailable');
+                }
+            };
+
+            const path = (stats?.path || 'IDLE').toLowerCase();
+            const pathClass = `path-pill path-${path.replace(/[^a-z_]/g, '')}`;
+            const confidenceValue =
+                stats?.confidence != null
+                    ? `${(stats.confidence * 100).toFixed(0)}%`
+                    : 'N/A';
+            const confidencePct =
+                stats?.confidence != null
+                    ? Math.max(0, Math.min(100, Math.round(stats.confidence * 100)))
+                    : 0;
+
+            const indexedPages = stats?.web_pages_indexed ?? 0;
+            const rerankerActive =
+                stats?.reranker_active === false
+                    ? 'OFFLINE'
+                    : 'ACTIVE';
+            const activeState = loading ? 'LIVE' : 'STANDBY';
+            const sessionLabel = formatSession(sessionSeconds);
+            const userTurns = messages.filter((m) => m.role === 'user').length;
+            const totalSources = messages.reduce(
+                (count, m) => count + ((m.citations && m.citations.length) || 0),
+                0
+            );
+
             return (
-                <div class="max-w-4xl mx-auto space-y-8">
-                    {/* Header */}
-                    <header class="neo-brutalist-border neo-brutalist-shadow bg-[#FFDE03] p-6 text-center">
-                        <h1 class="text-4xl md:text-6xl font-bold uppercase tracking-tighter text-black">Active RAG</h1>
-                        <p class="text-lg font-bold mt-2">Hybrid Search + Neural Reranking</p>
+                <main className="app-shell">
+                    <header className="panel hero">
+                        <div className="hero-top">
+                            <h1 className="hero-title">Active RAG Console</h1>
+                            <span className="hero-tag">Hybrid Search + Neural Reranking</span>
+                        </div>
+                        <p className="hero-subtitle">
+                            Self-contained UI with live streaming responses, retrieval stats, and memory controls.
+                        </p>
                     </header>
 
-                    {/* Stats & Controls */}
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="neo-brutalist-border neo-brutalist-shadow stats-card p-4 space-y-2">
-                            <h3 class="font-bold border-b-2 border-black pb-1 uppercase">System Status</h3>
-                            <div class="flex justify-between">
-                                <span>Path:</span>
-                                <span class="path-badge">{stats?.path || 'IDLE'}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>Confidence:</span>
-                                <span class="font-bold">{stats?.confidence ? (stats.confidence * 100).toFixed(0) + '%' : 'N/A'}</span>
-                            </div>
-                        </div>
+                    <section className="panel top-telemetry">
+                        <article className="telemetry-item">
+                            <span className="telemetry-label">Session Clock</span>
+                            <span className="telemetry-value">{sessionLabel}</span>
+                        </article>
+                        <article className="telemetry-item">
+                            <span className="telemetry-label">State</span>
+                            <span className={`telemetry-value ${loading ? 'live' : 'standby'}`}>{activeState}</span>
+                        </article>
+                        <article className="telemetry-item">
+                            <span className="telemetry-label">Questions Asked</span>
+                            <span className="telemetry-value">{userTurns}</span>
+                        </article>
+                        <article className="telemetry-item">
+                            <span className="telemetry-label">Sources Linked</span>
+                            <span className="telemetry-value">{totalSources}</span>
+                        </article>
+                    </section>
 
-                        <div class="neo-brutalist-border neo-brutalist-shadow stats-card p-4 space-y-2">
-                            <h3 class="font-bold border-b-2 border-black pb-1 uppercase">Retrieval</h3>
-                            <div class="flex justify-between">
-                                <span>Indexed:</span>
-                                <span class="font-bold">{stats?.web_pages_indexed || 0} pages</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>Reranker:</span>
-                                <span class="font-bold text-green-600">ACTIVE</span>
-                            </div>
+                    <section className="panel prompt-rail">
+                        <div className="prompt-label">Quick Launch Prompts</div>
+                        <div className="prompt-row">
+                            {quickPrompts.map((prompt, index) => (
+                                <button
+                                    key={index}
+                                    type="button"
+                                    className="prompt-chip"
+                                    onClick={() => applyPrompt(prompt)}
+                                    disabled={loading}
+                                >
+                                    {prompt}
+                                </button>
+                            ))}
                         </div>
+                    </section>
 
-                        <div class="flex flex-col gap-4">
-                            <button onClick={clearMemory} class="neo-brutalist-border neo-brutalist-shadow neo-brutalist-shadow-hover neo-brutalist-shadow-active btn-action p-3 uppercase flex-1">
+                    <section className="status-grid">
+                        <article className="panel card">
+                            <h3 className="card-title">System Status</h3>
+                            <div className="metric-row">
+                                <span className="metric-key">Path</span>
+                                <span className={pathClass}>{stats?.path || 'IDLE'}</span>
+                            </div>
+                            <div className="metric-row">
+                                <span className="metric-key">Confidence</span>
+                                <span className="metric-value">{confidenceValue}</span>
+                            </div>
+                            <div className="metric-stack" aria-hidden="true">
+                                <div className="confidence-track">
+                                    <div className="confidence-fill" style={{ width: `${confidencePct}%` }} />
+                                </div>
+                            </div>
+                            <div className="metric-row">
+                                <span className="metric-key">Reasoning</span>
+                                <span className="metric-value">{stats?.reasoning || 'Awaiting query'}</span>
+                            </div>
+                        </article>
+
+                        <article className="panel card">
+                            <h3 className="card-title">Retrieval Health</h3>
+                            <div className="metric-row">
+                                <span className="metric-key">Indexed</span>
+                                <span className="metric-value">{indexedPages} pages</span>
+                            </div>
+                            <div className="metric-row">
+                                <span className="metric-key">Reranker</span>
+                                <span className="metric-value">{rerankerActive}</span>
+                            </div>
+                            <div className="metric-row">
+                                <span className="metric-key">Mode</span>
+                                <span className="metric-value">BM25 + Vector + Re-rank</span>
+                            </div>
+                            <div className="metric-row">
+                                <span className="metric-key">Sources Linked</span>
+                                <span className="metric-value">{totalSources}</span>
+                            </div>
+                        </article>
+
+                        <article className="panel card control-stack">
+                            <h3 className="card-title">Session Controls</h3>
+                            <button
+                                onClick={clearMemory}
+                                className="btn btn-warm"
+                                disabled={loading}
+                            >
                                 Clear Memory
                             </button>
-                            <button onClick={() => setMessages([])} class="neo-brutalist-border neo-brutalist-shadow neo-brutalist-shadow-hover neo-brutalist-shadow-active bg-[#00E5FF] p-3 font-bold uppercase flex-1 text-black">
+                            <button
+                                onClick={() => setMessages([])}
+                                className="btn btn-cool"
+                                disabled={loading}
+                            >
                                 Clear Chat
                             </button>
-                        </div>
-                    </div>
+                        </article>
+                    </section>
 
-                    {/* Chat Area */}
-                    <div class="neo-brutalist-border neo-brutalist-shadow bg-white h-[500px] flex flex-col">
-                        <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                    <section className="panel chat-panel">
+                        <div className="chat-head">
+                            <div>
+                                <h2 className="chat-title">Conversation</h2>
+                                <p className="chat-sub">Ask anything. Responses stream token by token.</p>
+                            </div>
+                            {loading ? <span className="stream-dot" title="Streaming response" /> : null}
+                        </div>
+
+                        <div className="messages">
                             {messages.length === 0 && !currentStreamingText && (
-                                <div class="text-center mt-20 opacity-50 uppercase font-bold text-xl">
+                                <div className="empty">
                                     Ready to retrieve...
                                 </div>
                             )}
+
                             {messages.map((m, i) => (
-                                <div key={i} class={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div class={`max-w-[80%] p-4 neo-brutalist-border neo-brutalist-shadow ${m.role === 'user' ? 'chat-bubble-user text-black' : 'chat-bubble-bot text-black'}`}>
-                                        <div class="font-bold mb-2 uppercase text-xs opacity-70">{m.role}</div>
-                                        <div class="text-lg whitespace-pre-wrap">{m.text}</div>
+                                <div key={i} className={`message-row ${m.role === 'user' ? 'user' : 'bot'}`}>
+                                    <article className={`bubble ${m.role === 'user' ? 'user' : 'bot'}`}>
+                                        <div className="bubble-head-row">
+                                            <div className="bubble-head">
+                                                {m.role}
+                                                {m.time ? ` • ${m.time}` : ''}
+                                            </div>
+                                            {m.role === 'bot' && m.text ? (
+                                                <button
+                                                    type="button"
+                                                    className="mini-btn"
+                                                    onClick={() => copyMessage(m.text)}
+                                                >
+                                                    Copy
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                        <p className="bubble-text">{m.text}</p>
                                         
                                         {m.citations && m.citations.length > 0 && (
-                                            <div class="mt-4 pt-4 border-t-2 border-black">
-                                                <p class="font-bold text-xs uppercase mb-2">Sources:</p>
-                                                <ul class="space-y-1">
+                                            <div className="sources">
+                                                <span className="source-label">Sources</span>
+                                                <div>
                                                     {m.citations.map((c, j) => (
-                                                        <li key={j} class="text-xs truncate">
-                                                            <a href={c} target="_blank" class="underline hover:bg-black hover:text-white transition-colors">{c}</a>
-                                                        </li>
+                                                        <div key={j}>
+                                                            <a href={c} target="_blank" rel="noreferrer" className="source-link">{c}</a>
+                                                        </div>
                                                     ))}
-                                                </ul>
+                                                </div>
                                             </div>
                                         )}
-                                    </div>
+                                    </article>
                                 </div>
                             ))}
+
                             {currentStreamingText && (
-                                <div class="flex justify-start">
-                                    <div class="max-w-[80%] p-4 neo-brutalist-border neo-brutalist-shadow chat-bubble-bot text-black">
-                                        <div class="font-bold mb-2 uppercase text-xs opacity-70">bot (streaming)</div>
-                                        <div class="text-lg whitespace-pre-wrap">{currentStreamingText}</div>
-                                    </div>
+                                <div className="message-row bot">
+                                    <article className="bubble bot">
+                                        <div className="bubble-head">bot (streaming)</div>
+                                        <p className="bubble-text">{currentStreamingText}</p>
+                                    </article>
                                 </div>
                             )}
+
                             {loading && !currentStreamingText && (
-                                <div class="flex justify-start">
-                                    <div class="p-4 neo-brutalist-border neo-brutalist-shadow chat-bubble-bot text-black animate-pulse uppercase font-bold">
+                                <div className="message-row bot">
+                                    <article className="bubble bot">
+                                        <div className="bubble-head">status</div>
+                                        <p className="bubble-text">
                                         Retrieving Context...
-                                    </div>
+                                        </p>
+                                    </article>
                                 </div>
                             )}
                             <div ref={messagesEndRef} />
                         </div>
 
-                        {/* Input Area */}
-                        <form onSubmit={handleSubmit} class="p-4 bg-[#f0f0f0] border-t-4 border-black flex gap-4">
-                            <input 
-                                type="text"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                placeholder="Ask anything (hybrid search + reranking active)..."
-                                class="flex-1 p-4 neo-brutalist-border font-bold text-lg focus:outline-none text-black"
-                                disabled={loading}
-                            />
-                            <button 
+                        <form onSubmit={handleSubmit} className="composer">
+                            <div className="composer-wrap">
+                                <textarea
+                                    ref={inputRef}
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={handleComposerKeyDown}
+                                    placeholder="Ask anything (hybrid search + reranking active)..."
+                                    className="composer-textarea"
+                                    disabled={loading}
+                                />
+                                <div className="composer-meta">
+                                    <span>Enter to send • Shift+Enter for newline</span>
+                                    <span className="char-meter">{input.length} chars</span>
+                                </div>
+                            </div>
+                            <button
                                 type="submit"
-                                class="neo-brutalist-border neo-brutalist-shadow neo-brutalist-shadow-hover neo-brutalist-shadow-active btn-action px-8 uppercase"
+                                className="btn btn-warm"
                                 disabled={loading || !input.trim()}
                             >
-                                Send
+                                {loading ? 'Thinking...' : 'Send'}
                             </button>
                         </form>
-                    </div>
+                    </section>
                     
-                    <footer class="text-center font-bold uppercase opacity-50 pb-8 text-black">
+                    <footer className="footer-note">
                         Hybrid RAG (BM25 + Vector + Re-ranker)
                     </footer>
-                </div>
+                    {toast ? <div className="toast">{toast}</div> : null}
+                </main>
             );
         }
 

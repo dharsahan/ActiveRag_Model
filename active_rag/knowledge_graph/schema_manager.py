@@ -7,6 +7,7 @@ for entities and relationships across all content domains.
 
 from typing import Dict, Any, List, Optional
 import logging
+import re
 from ..schemas.entities import (
     ENTITY_SCHEMAS,
     EntitySchema,
@@ -54,61 +55,27 @@ class SchemaManager:
             bool: True if constraints created successfully, False otherwise
         """
         constraints = [
-            # Base entity constraint
-            "CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE",
-
-            # Research domain constraints
-            "CREATE CONSTRAINT person_id IF NOT EXISTS FOR (p:Person) REQUIRE p.id IS UNIQUE",
-            "CREATE CONSTRAINT organization_id IF NOT EXISTS FOR (o:Organization) REQUIRE o.id IS UNIQUE",
-            "CREATE CONSTRAINT concept_id IF NOT EXISTS FOR (c:Concept) REQUIRE c.id IS UNIQUE",
-            "CREATE CONSTRAINT publication_id IF NOT EXISTS FOR (p:Publication) REQUIRE p.id IS UNIQUE",
-            "CREATE CONSTRAINT conference_id IF NOT EXISTS FOR (c:Conference) REQUIRE c.id IS UNIQUE",
-            "CREATE CONSTRAINT journal_id IF NOT EXISTS FOR (j:Journal) REQUIRE j.id IS UNIQUE",
-
-            # Technical domain constraints
-            "CREATE CONSTRAINT component_id IF NOT EXISTS FOR (c:Component) REQUIRE c.id IS UNIQUE",
-            "CREATE CONSTRAINT api_id IF NOT EXISTS FOR (a:API) REQUIRE a.id IS UNIQUE",
-            "CREATE CONSTRAINT service_id IF NOT EXISTS FOR (s:Service) REQUIRE s.id IS UNIQUE",
-            "CREATE CONSTRAINT configuration_id IF NOT EXISTS FOR (c:Configuration) REQUIRE c.id IS UNIQUE",
-            "CREATE CONSTRAINT technology_id IF NOT EXISTS FOR (t:Technology) REQUIRE t.id IS UNIQUE",
-
-            # Business domain constraints
-            "CREATE CONSTRAINT process_id IF NOT EXISTS FOR (p:Process) REQUIRE p.id IS UNIQUE",
-            "CREATE CONSTRAINT project_id IF NOT EXISTS FOR (p:Project) REQUIRE p.id IS UNIQUE",
-            "CREATE CONSTRAINT team_id IF NOT EXISTS FOR (t:Team) REQUIRE t.id IS UNIQUE",
-            "CREATE CONSTRAINT product_id IF NOT EXISTS FOR (p:Product) REQUIRE p.id IS UNIQUE",
-            "CREATE CONSTRAINT metric_id IF NOT EXISTS FOR (m:Metric) REQUIRE m.id IS UNIQUE",
-
-            # Mixed web domain constraints
-            "CREATE CONSTRAINT document_id IF NOT EXISTS FOR (d:Document) REQUIRE d.id IS UNIQUE",
-            "CREATE CONSTRAINT website_id IF NOT EXISTS FOR (w:Website) REQUIRE w.id IS UNIQUE",
-            "CREATE CONSTRAINT topic_id IF NOT EXISTS FOR (t:Topic) REQUIRE t.id IS UNIQUE",
-            "CREATE CONSTRAINT event_id IF NOT EXISTS FOR (e:Event) REQUIRE e.id IS UNIQUE",
-            "CREATE CONSTRAINT location_id IF NOT EXISTS FOR (l:Location) REQUIRE l.id IS UNIQUE"
+            "CREATE CONSTRAINT entity_id FOR (e:Entity) REQUIRE e.id IS UNIQUE",
+            "CREATE CONSTRAINT person_id FOR (p:Person) REQUIRE p.id IS UNIQUE",
+            "CREATE CONSTRAINT org_id FOR (o:Organization) REQUIRE o.id IS UNIQUE",
+            "CREATE CONSTRAINT concept_id FOR (c:Concept) REQUIRE c.id IS UNIQUE",
+            "CREATE CONSTRAINT component_id FOR (c:Component) REQUIRE c.id IS UNIQUE",
+            "CREATE CONSTRAINT process_id FOR (p:Process) REQUIRE p.id IS UNIQUE",
+            "CREATE CONSTRAINT document_id FOR (d:Document) REQUIRE d.id IS UNIQUE"
         ]
-
-        # Additional indexes for common search patterns
-        indexes = [
-            "CREATE INDEX entity_name IF NOT EXISTS FOR (e:Entity) ON (e.name)",
-            "CREATE INDEX person_name IF NOT EXISTS FOR (p:Person) ON (p.name)",
-            "CREATE INDEX document_title IF NOT EXISTS FOR (d:Document) ON (d.title)",
-            "CREATE INDEX document_hash IF NOT EXISTS FOR (d:Document) ON (d.content_hash)"
-        ]
-
-        all_queries = constraints + indexes
 
         try:
             with self.client._driver.session() as session:
-                for query in all_queries:
+                for query in constraints:
                     try:
                         session.run(query)
-                        self.logger.info(f"Created constraint/index: {query}")
+                        self.logger.info(f"Created constraint: {query}")
                     except Exception as e:
-                        # Constraint/index may already exist
+                        # Constraint may already exist
                         if "already exists" not in str(e) and "An equivalent" not in str(e):
-                            self.logger.warning(f"Failed to create constraint/index: {e}")
+                            self.logger.warning(f"Failed to create constraint: {e}")
 
-            self.logger.info("Successfully created/verified all constraints and indexes")
+            self.logger.info("Successfully created/verified all constraints")
             return True
 
         except Exception as e:
@@ -140,6 +107,10 @@ class SchemaManager:
 
         # Validate property values (basic type checking)
         if not self._validate_property_values(properties):
+            return False
+
+        # Enhanced property format validation
+        if not self._validate_property_formats(label, properties):
             return False
 
         self.logger.debug(f"Entity '{label}' validation passed")
@@ -188,6 +159,10 @@ class SchemaManager:
 
             # Validate property values
             if not self._validate_property_values(properties):
+                return False
+
+            # Enhanced property format validation for relationship properties
+            if not self._validate_relationship_property_formats(rel_type, properties):
                 return False
 
         self.logger.debug(f"Relationship '{rel_type}' validation passed")
@@ -270,6 +245,86 @@ class SchemaManager:
                 results["errors"].append(f"Relationship validation error: {e}")
 
         return results
+
+    def _validate_property_formats(self, label: str, properties: Dict[str, Any]) -> bool:
+        """
+        Validate property formats based on domain-specific rules.
+
+        Args:
+            label: Entity label/type
+            properties: Dictionary of properties to validate
+
+        Returns:
+            bool: True if property formats are valid, False otherwise
+        """
+        # Email validation for Person entities
+        if label == "Person" and "email" in properties:
+            email = properties["email"]
+            if email and not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
+                self.logger.error(f"Invalid email format: {email}")
+                return False
+
+        # URL validation for Organization entities
+        if label == "Organization" and "website" in properties:
+            website = properties["website"]
+            if website and not re.match(r'^https?://', website):
+                self.logger.error(f"Invalid website URL format: {website}")
+                return False
+
+        # Version constraint validation for Component dependencies (in relationships)
+        if label == "Component" and "version" in properties:
+            version = properties["version"]
+            if version and not re.match(r'^[0-9]+\.[0-9]+(\.[0-9]+)?(-[a-zA-Z0-9]+)?$', version):
+                self.logger.error(f"Invalid version format: {version}")
+                return False
+
+        # ID format validation (consistent patterns)
+        if "id" in properties:
+            entity_id = properties["id"]
+            if entity_id and not re.match(r'^[a-zA-Z0-9_-]+$', entity_id):
+                self.logger.error(f"Invalid ID format: {entity_id}. Must contain only letters, numbers, underscores, and hyphens")
+                return False
+
+        return True
+
+    def _validate_relationship_property_formats(self, rel_type: str, properties: Dict[str, Any]) -> bool:
+        """
+        Validate relationship property formats based on domain-specific rules.
+
+        Args:
+            rel_type: Relationship type
+            properties: Dictionary of relationship properties to validate
+
+        Returns:
+            bool: True if property formats are valid, False otherwise
+        """
+        # Version constraint validation for DEPENDS_ON relationships
+        if rel_type == "DEPENDS_ON" and "version_constraint" in properties:
+            version_constraint = properties["version_constraint"]
+            if version_constraint and not re.match(r'^[><=^~]*[0-9]+\.[0-9]+(\.[0-9]+)?(-[a-zA-Z0-9]+)?$', version_constraint):
+                self.logger.error(f"Invalid version constraint format: {version_constraint}")
+                return False
+
+        # Year validation for time-based relationships
+        if "year" in properties:
+            year = properties["year"]
+            if year and (not isinstance(year, int) or year < 1900 or year > 2100):
+                self.logger.error(f"Invalid year: {year}. Must be between 1900 and 2100")
+                return False
+
+        if "start_year" in properties:
+            start_year = properties["start_year"]
+            if start_year and (not isinstance(start_year, int) or start_year < 1900 or start_year > 2100):
+                self.logger.error(f"Invalid start_year: {start_year}. Must be between 1900 and 2100")
+                return False
+
+        if "end_year" in properties:
+            end_year = properties["end_year"]
+            if end_year and (not isinstance(end_year, int) or end_year < 1900 or end_year > 2100):
+                self.logger.error(f"Invalid end_year: {end_year}. Must be between 1900 and 2100")
+                return False
+
+        return True
 
     def _validate_property_values(self, properties: Dict[str, Any]) -> bool:
         """

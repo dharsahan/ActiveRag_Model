@@ -28,6 +28,11 @@ _PROVIDERS: dict[str, dict[str, str]] = {
         "default_model": "meta-llama/Llama-3-70b-chat-hf",
         "api_key_env": "TOGETHER_API_KEY",
     },
+    "local":{
+        "base_url": "http://localhost:4141/v1",
+        "default_model": "",
+        "api_key": "ollama",
+    }
 }
 
 

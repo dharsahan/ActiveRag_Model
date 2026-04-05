@@ -1,0 +1,155 @@
+<h2>Completing Your ActiveRAG System</h2>
+<p class="subtitle">Let's address the gaps and unlock Neo4j's full potential</p>
+
+<div class="options">
+  <div class="option" data-choice="streaming" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>🌊 Fix Streaming Support</h3>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>What we'll add:</h4>
+          <ul>
+            <li>Implement <code>run_stream()</code> method for HybridRAGPipeline</li>
+            <li>Add async streaming for graph operations</li>
+            <li>Stream confidence updates and reasoning steps</li>
+            <li>Maintain progress indicators during graph traversal</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Quick fix (30 min):</h4>
+          <ul>
+            <li>Add generator method with yield statements</li>
+            <li>Stream metadata tokens like other pipelines</li>
+            <li>Test with existing streaming UI in main.py</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="data" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>📊 Enrich Graph Database</h3>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Current State:</h4>
+          <ul>
+            <li>49 nodes, 131 relationships</li>
+            <li>Mostly MENTIONS relationships</li>
+            <li>Limited entity connections</li>
+            <li>Basic person/document structure</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>What's Missing:</h4>
+          <ul>
+            <li>Rich semantic relationships (WORKS_FOR, FOUNDED, LOCATED_IN)</li>
+            <li>Domain-specific entities (Companies, Products, Locations)</li>
+            <li>Multi-hop reasoning paths</li>
+            <li>Temporal relationships (WORKED_AT, STUDIED_AT)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="examples" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>🎯 Create Power Scenarios</h3>
+      <div class="section">
+        <h4>Sample Graph-Powered Queries:</h4>
+        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0;">
+          <strong>"Who has Alice worked with on AI projects?"</strong><br/>
+          <span style="color: #666;">→ Multi-hop: Alice → WORKED_WITH → Person → CONTRIBUTED_TO → AI_Project</span>
+        </div>
+        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0;">
+          <strong>"What companies are researching quantum computing?"</strong><br/>
+          <span style="color: #666;">→ Path: Company → RESEARCHES → QuantumComputing ← MENTIONS ← Document</span>
+        </div>
+        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0;">
+          <strong>"Find experts in machine learning at Stanford"</strong><br/>
+          <span style="color: #666;">→ Complex: Person → AFFILIATED_WITH → Stanford AND Person → EXPERT_IN → ML</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top: 30px;">
+  <div class="mockup-header">🚀 Implementation Roadmap</div>
+  <div class="mockup-body">
+
+    <div style="display: flex; gap: 20px;">
+
+      <div style="flex: 1; background: #e8f5e8; padding: 15px; border-radius: 8px;">
+        <h3 style="color: #2e7d32;">Phase 1: Quick Fixes (1-2 hours)</h3>
+        <ul style="margin: 10px 0;">
+          <li>✅ Add streaming to HybridRAGPipeline</li>
+          <li>✅ Fix async/sync consistency</li>
+          <li>✅ Test with existing UI</li>
+          <li>✅ Verify error handling</li>
+        </ul>
+      </div>
+
+      <div style="flex: 1; background: #e3f2fd; padding: 15px; border-radius: 8px;">
+        <h3 style="color: #1976d2;">Phase 2: Data Enrichment (2-3 hours)</h3>
+        <ul style="margin: 10px 0;">
+          <li>📊 Create rich test dataset</li>
+          <li>🔗 Add semantic relationships</li>
+          <li>🏢 Companies, universities, projects</li>
+          <li>⏰ Temporal connections</li>
+        </ul>
+      </div>
+
+      <div style="flex: 1; background: #fff3e0; padding: 15px; border-radius: 8px;">
+        <h3 style="color: #f57c00;">Phase 3: Showcase (1 hour)</h3>
+        <ul style="margin: 10px 0;">
+          <li>🎯 Power query examples</li>
+          <li>📈 Performance benchmarks</li>
+          <li>📝 Documentation updates</li>
+          <li>🎬 Demo scenarios</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="background: #f3e5f5; padding: 20px; border-radius: 8px; margin-top: 20px;">
+  <h3 style="color: #7b1fa2;">🎯 Expected Outcomes</h3>
+
+  <div style="display: flex; gap: 20px; margin-top: 15px;">
+    <div style="flex: 1;">
+      <h4>Before (Current):</h4>
+      <ul>
+        <li>Graph confidence: 10%</li>
+        <li>Fallback to vector search</li>
+        <li>Basic entity mentions</li>
+        <li>No streaming for hybrid mode</li>
+      </ul>
+    </div>
+
+    <div style="flex: 1;">
+      <h4>After (Enhanced):</h4>
+      <ul>
+        <li>Graph confidence: 70-90%</li>
+        <li>Multi-hop graph reasoning</li>
+        <li>Rich semantic relationships</li>
+        <li>Full streaming support</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="background: white; padding: 15px; border-radius: 8px; margin-top: 15px;">
+    <h4>Sample Enhanced Query Result:</h4>
+    <div style="font-family: monospace; background: #f8f9fa; padding: 10px; border-radius: 4px;">
+      <strong>Query:</strong> "Who has Alice Smith collaborated with?"<br/>
+      <strong>Graph Path:</strong> Alice → COLLABORATED_WITH → Bob → WORKED_AT → TechCorp<br/>
+      <strong>Confidence:</strong> 85% (strong graph connectivity)<br/>
+      <strong>Answer:</strong> "Alice Smith has collaborated with Bob Jones on the ActiveRAG project. Bob currently works at TechCorp where they've been developing AI systems since 2022..."
+    </div>
+  </div>
+</div>

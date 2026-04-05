@@ -27,7 +27,7 @@ from active_rag.config import Config
 
 logger = logging.getLogger(__name__)
 
-_REQUEST_TIMEOUT = 10  # seconds
+_REQUEST_TIMEOUT = 30  # seconds - increased from 10
 _MAX_WORKERS = 5  # parallel scraping threads
 
 
@@ -92,14 +92,17 @@ class WebSearcher:
     # ------------------------------------------------------------------
     # Scrape & Extract Content (with async playwright & trafilatura)
     # ------------------------------------------------------------------
-    async def scrape_async(self, url: str) -> ScrapedPage | None:
+    async def scrape_async(self, url: str, headless: bool | None = None) -> ScrapedPage | None:
         """Fetch *url* using async playwright and return its extracted text content."""
         html_content = ""
         title = ""
         
+        # Determine headless mode: priority tool_param > config > True
+        headless_mode = headless if headless is not None else self._config.headless
+        
         try:
             async with async_playwright() as p:
-                async with await p.chromium.launch(headless=True) as browser:
+                async with await p.chromium.launch(headless=headless_mode) as browser:
                     async with await browser.new_context(
                         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
                     ) as context:
@@ -119,11 +122,29 @@ class WebSearcher:
                         
                         page = await context.new_page()
                         try:
+                            # More robust loading with multiple strategies
                             await page.goto(url, wait_until="domcontentloaded", timeout=_REQUEST_TIMEOUT * 1000)
-                            # Wait for potential JS rendering
-                            await asyncio.sleep(1)
+
+                            # Wait for potential JS rendering with shorter timeout
+                            try:
+                                await page.wait_for_load_state("networkidle", timeout=3000)
+                            except:
+                                # If networkidle fails, just wait a bit for basic JS
+                                await asyncio.sleep(2)
+
                             html_content = await page.content()
                             title = await page.title()
+                        except Exception as e:
+                            logger.debug(f"Primary load failed for {url}, trying fallback: {e}")
+                            try:
+                                # Fallback: try with no wait conditions
+                                await page.goto(url, wait_until="commit", timeout=15000)
+                                await asyncio.sleep(2)
+                                html_content = await page.content()
+                                title = await page.title()
+                            except Exception as e2:
+                                logger.debug(f"Fallback load also failed for {url}: {e2}")
+                                raise e2
                         finally:
                             # Ensure we unroute before the context manager closes the context
                             try:
@@ -159,6 +180,44 @@ class WebSearcher:
                 
         except Exception as e:
             logger.debug("Failed to fetch/render URL using Playwright: %s - %s", url, str(e)[:50])
+
+            # Fallback: try simple HTTP request with requests
+            try:
+                logger.debug(f"Trying HTTP fallback for {url}")
+                response = self._session.get(url, timeout=_REQUEST_TIMEOUT, allow_redirects=True)
+                response.raise_for_status()
+
+                html_content = response.text
+                soup = BeautifulSoup(html_content, "html.parser")
+                title = soup.title.string.strip() if soup.title else ""
+
+                # Use trafilatura for extraction
+                extracted_text = trafilatura.extract(html_content, include_comments=False, include_tables=True)
+
+                if not extracted_text:
+                    # BeautifulSoup fallback
+                    for s in soup(["script", "style", "nav", "footer", "header", "aside"]):
+                        s.decompose()
+                    extracted_text = soup.get_text(separator="\n")
+
+                if extracted_text and len(extracted_text) >= 100:
+                    # Clean up text
+                    lines = [line.strip() for line in extracted_text.split("\n") if line.strip()]
+                    text = "\n".join(lines)
+
+                    # Semantic chunking
+                    from active_rag.chunker import TextChunker
+                    chunker = TextChunker(chunk_size=2000, overlap=200)
+                    chunks = chunker.chunk(text)
+                    text = chunks[0] if chunks else text
+
+                    word_count = len(text.split())
+                    logger.debug(f"HTTP fallback successful for {url}: {word_count} words")
+                    return ScrapedPage(url=url, content=text, title=title, word_count=word_count)
+
+            except Exception as fallback_e:
+                logger.debug(f"HTTP fallback also failed for {url}: {fallback_e}")
+
             return None
 
     def scrape(self, url: str) -> ScrapedPage | None:
@@ -184,7 +243,7 @@ class WebSearcher:
     # ------------------------------------------------------------------
     # Parallel Search and Scrape
     # ------------------------------------------------------------------
-    async def search_and_scrape_async(self, query: str) -> list[ScrapedPage]:
+    async def search_and_scrape_async(self, query: str, headless: bool | None = None) -> list[ScrapedPage]:
         """Search the web for *query* and scrape all result pages concurrently."""
         results = self.search(query)
         if not results:
@@ -194,7 +253,7 @@ class WebSearcher:
         self._progress_callback(f"Found {len(urls)} results, scraping concurrently...")
 
         # Concurrently scrape all URLs
-        tasks = [self.scrape_async(url) for url in urls]
+        tasks = [self.scrape_async(url, headless=headless) for url in urls]
         pages_raw = await asyncio.gather(*tasks)
         
         pages = [p for p in pages_raw if p is not None]
@@ -205,7 +264,7 @@ class WebSearcher:
         self._progress_callback(f"Successfully scraped {len(pages)} pages")
         return pages
 
-    def search_and_scrape(self, query: str) -> list[ScrapedPage]:
+    def search_and_scrape(self, query: str, headless: bool | None = None) -> list[ScrapedPage]:
         """Synchronous wrapper for search_and_scrape_async."""
         try:
             try:
@@ -218,7 +277,7 @@ class WebSearcher:
                 import nest_asyncio
                 nest_asyncio.apply()
                 
-            return loop.run_until_complete(self.search_and_scrape_async(query))
+            return loop.run_until_complete(self.search_and_scrape_async(query, headless=headless))
         except Exception as e:
             logger.error(f"Sync search_and_scrape failed: {e}")
             return []

@@ -46,3 +46,7 @@ class VectorDatabaseTool:
     async def execute_async(self, kwargs: dict) -> str:
         """Asynchronous execution (already calls sync search but fits the async interface)."""
         return self.execute(kwargs)
+
+    def count(self) -> int:
+        """Return number of documents in the vector store."""
+        return self._store.count()

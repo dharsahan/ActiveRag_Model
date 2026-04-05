@@ -55,8 +55,8 @@ def create_app(config: Config | None = None) -> FastAPI:
         return {"status": "ok"}
 
     @app.post("/query", response_model=QueryResponse)
-    def query(req: QueryRequest):
-        result = pipeline.run(req.query)
+    async def query(req: QueryRequest):
+        result = await pipeline.run_async(req.query)
         return QueryResponse(
             answer=result.answer.text,
             citations=result.answer.citations,
@@ -95,6 +95,38 @@ def create_app(config: Config | None = None) -> FastAPI:
     def clear_cache():
         pipeline.clear_cache()
         return {"status": "cleared"}
+
+    # --- Hybrid RAG endpoint ---
+    hybrid_pipeline = None
+
+    @app.post("/query/hybrid", response_model=QueryResponse)
+    async def query_hybrid(req: QueryRequest):
+        nonlocal hybrid_pipeline
+        if hybrid_pipeline is None:
+            from active_rag.hybrid_pipeline import HybridRAGPipeline
+            hybrid_pipeline = HybridRAGPipeline(config or Config())
+        result = hybrid_pipeline.run(req.query)
+        return QueryResponse(
+            answer=result.answer.text,
+            citations=result.answer.citations,
+            path=result.path,
+        )
+
+    @app.post("/query/explain")
+    async def query_explain(req: QueryRequest):
+        """Hybrid query with full reasoning explanation."""
+        nonlocal hybrid_pipeline
+        if hybrid_pipeline is None:
+            from active_rag.hybrid_pipeline import HybridRAGPipeline
+            hybrid_pipeline = HybridRAGPipeline(config or Config())
+        result = hybrid_pipeline.run(req.query, explain=True)
+        explanation = result.diagnostics.get("explanation", {})
+        return {
+            "answer": result.answer.text,
+            "citations": result.answer.citations,
+            "path": result.path,
+            "explanation": explanation,
+        }
 
     # Mount static files and serve index.html at root
     static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static")

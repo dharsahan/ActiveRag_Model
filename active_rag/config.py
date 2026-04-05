@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 @dataclass
@@ -14,7 +14,7 @@ class Config:
 
     # Ollama / LLM settings
     provider: str = field(
-        default_factory=lambda: os.getenv("LLM_PROVIDER", "nvidia").lower()
+        default_factory=lambda: os.getenv("LLM_PROVIDER", "local").lower()
     )
     ollama_base_url: str | None = None
     model_name: str | None = None
@@ -45,12 +45,9 @@ class Config:
         )
     )
 
-    # ChromaDB / vector store settings
-    chroma_persist_dir: str = field(
-        default_factory=lambda: os.getenv("CHROMA_PERSIST_DIR", "./chroma_db")
-    )
-    collection_name: str = field(
-        default_factory=lambda: os.getenv("COLLECTION_NAME", "active_rag")
+    # Vector store settings (Neo4j-backed)
+    vector_index_name: str = field(
+        default_factory=lambda: os.getenv("VECTOR_INDEX_NAME", "active_rag")
     )
     top_k: int = field(
         default_factory=lambda: int(os.getenv("TOP_K", "3"))
@@ -60,9 +57,39 @@ class Config:
     max_search_results: int = field(
         default_factory=lambda: int(os.getenv("MAX_SEARCH_RESULTS", "3"))
     )
+    headless: bool = field(
+        default_factory=lambda: os.getenv("HEADLESS", "true").lower() == "true"
+    )
 
     # Time-sensitive query settings (seconds). Documents older than this
     # are skipped when the query is about current/recent events.
     time_sensitive_max_age: int = field(
         default_factory=lambda: int(os.getenv("TIME_SENSITIVE_MAX_AGE", "3600"))
+    )
+
+    # Neo4j / Knowledge Graph settings
+    neo4j_uri: str = field(
+        default_factory=lambda: os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    )
+    neo4j_username: str = field(
+        default_factory=lambda: os.getenv("NEO4J_USERNAME", "neo4j")
+    )
+    neo4j_password: str = field(
+        default_factory=lambda: os.getenv("NEO4J_PASSWORD", "activerag123")
+    )
+
+    # Graph feature toggles
+    enable_graph_features: bool = field(
+        default_factory=lambda: os.getenv("ENABLE_GRAPH_FEATURES", "true").lower() == "true"
+    )
+    max_graph_hops: int = field(
+        default_factory=lambda: int(os.getenv("MAX_GRAPH_HOPS", "3"))
+    )
+
+    # NLP Pipeline settings
+    spacy_model: str = field(
+        default_factory=lambda: os.getenv("SPACY_MODEL", "en_core_web_sm")
+    )
+    enable_relation_extraction: bool = field(
+        default_factory=lambda: os.getenv("ENABLE_RELATION_EXTRACTION", "true").lower() == "true"
     )

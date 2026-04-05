@@ -24,8 +24,8 @@ def get_schema():
     }
 
 class StoreMemoryTool:
-    def __init__(self, config: Config):
-        self._store = VectorStore(config)
+    def __init__(self, config: Config, vector_store: Optional[VectorStore] = None):
+        self._store = vector_store or VectorStore(config)
         self.schema = get_schema()
         
     def execute(self, kwargs: dict) -> str:

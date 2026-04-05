@@ -1,7 +1,7 @@
 """Tests for the REST API."""
 
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 
 from active_rag.api import create_app
@@ -24,7 +24,8 @@ def test_query_endpoint(mock_pipeline_cls):
     
     mock_result.web_pages_indexed = 0
     mock_result.from_cache = False
-    mock_pipeline.run.return_value = mock_result
+    # API uses await pipeline.run_async(), so we need AsyncMock
+    mock_pipeline.run_async = AsyncMock(return_value=mock_result)
     mock_pipeline_cls.return_value = mock_pipeline
 
     app = create_app()

@@ -22,6 +22,7 @@ from rich.panel import Panel
 from rich.markdown import Markdown
 
 from active_rag.config import Config
+from active_rag.agent import AgenticOrchestrator
 from active_rag.pipeline import ActiveRAGPipeline, PipelineResult
 from active_rag.console import (
     console,
@@ -118,6 +119,18 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--legacy-pipeline", action="store_true",
         help="Use the fast static pipeline instead of the default Autonomous Agent.",
+    )
+    parser.add_argument(
+        "--agent", action="store_true",
+        help="Use the Autonomous Agent (ReAct) with tool-calling capabilities.",
+    )
+    parser.add_argument(
+        "--hybrid", action="store_true",
+        help="Use the Hybrid Vector-Graph RAG pipeline with intelligent routing.",
+    )
+    parser.add_argument(
+        "--ultimate", action="store_true",
+        help="Use the Ultimate Pipeline that auto-escalates through all knowledge sources and learns continuously.",
     )
     parser.add_argument(
         "--serve", action="store_true",
@@ -231,6 +244,7 @@ def main(argv: list[str] | None = None) -> None:
         if args.verbose:
             print_info(msg)
 
+    # Choose pipeline with streaming compatibility
     if args.legacy_pipeline:
         pipeline = ActiveRAGPipeline(
             config,
@@ -238,9 +252,23 @@ def main(argv: list[str] | None = None) -> None:
             enable_memory=not args.no_memory,
             progress_callback=progress_callback,
         )
-    else:
-        from active_rag.agent import AgenticOrchestrator
+    elif args.hybrid:
+        from active_rag.hybrid_pipeline import HybridRAGPipeline
+        pipeline = HybridRAGPipeline(config, progress_callback=progress_callback)
+    elif args.ultimate:
+        from active_rag.ultimate_pipeline import UltimateActiveRAGPipeline
+        pipeline = UltimateActiveRAGPipeline(config, progress_callback=progress_callback)
+        if not args.query:  # Only print this message for interactive mode
+            print_info("🚀 Using Ultimate Pipeline - Auto-learning knowledge system!")
+    elif args.agent:
         pipeline = AgenticOrchestrator(config, progress_callback=progress_callback)
+        if not args.query:
+            print_info("🤖 Using Autonomous Agent (ReAct)!")
+    else:
+        # Default to agentic orchestrator for the most interactive experience
+        pipeline = AgenticOrchestrator(config, progress_callback=progress_callback)
+        if not args.query:
+            print_info("🤖 Using Autonomous Agent (ReAct)!")
 
     if args.clear_memory:
         pipeline.clear_memory()
@@ -249,46 +277,172 @@ def main(argv: list[str] | None = None) -> None:
             return
 
     if args.query:
-        _process_query(pipeline, args.query, stream=not args.no_stream)
+        explain = getattr(args, 'explain', False)
+        _process_query(pipeline, args.query, stream=not args.no_stream, explain=explain)
     else:
-        _interactive_loop(pipeline, stream=not args.no_stream)
+        explain = getattr(args, 'explain', False)
+        _interactive_loop(pipeline, stream=not args.no_stream, explain=explain)
 
 
 def _process_query(
     pipeline: ActiveRAGPipeline,
     query: str,
     stream: bool = True,
+    explain: bool = False,
 ) -> None:
     """Process a single query with optional streaming."""
+    # Handle internal commands
+    cmd = query.lower().strip()
+    if cmd == "/stats":
+        if hasattr(pipeline, 'get_knowledge_stats'):
+            stats = pipeline.get_knowledge_stats()
+            print_info("📊 Knowledge System Statistics:")
+            for system, data in stats.items():
+                console.print(f"  {system.title()}: {data}")
+        else:
+            print_warning("Stats not available for this pipeline")
+        return
+    
+    if cmd == "/cache":
+        if hasattr(pipeline, '_cache') and pipeline._cache:
+            stats = pipeline._cache.stats()
+            print_info(f"Cache: {stats['size']} entries, {stats['volume']} bytes")
+        else:
+            print_warning("Caching is disabled for this pipeline")
+        return
+
+    if cmd == "/clear":
+        pipeline.clear_memory()
+        print_success("Conversation memory cleared!")
+        return
+
+    if cmd == "/reset":
+        if hasattr(pipeline, 'clear_database'):
+            if pipeline.clear_database():
+                print_success("Knowledge base completely wiped!")
+            else:
+                print_error("Failed to wipe knowledge base.")
+        else:
+            print_warning("Reset not available for this pipeline")
+        return
+
+    if cmd == "/dump":
+        # Dump memory directly
+        if isinstance(pipeline, AgenticOrchestrator):
+            print_info("📂 Memory Dump:")
+            result = pipeline._list_memory_tool.execute({})
+            console.print(result)
+        else:
+            print_warning("/dump is only available for the Agentic pipeline")
+        return
+
     if stream:
         _process_query_stream(pipeline, query)
     else:
-        _process_query_sync(pipeline, query)
+        _process_query_sync(pipeline, query, explain=explain)
 
 
-def _process_query_sync(pipeline: ActiveRAGPipeline, query: str) -> None:
+def _process_query_sync(pipeline: ActiveRAGPipeline, query: str, explain: bool = False) -> None:
     """Process query without streaming."""
     with status_spinner("Thinking..."):
-        result = pipeline.run(query)
+        if explain and hasattr(pipeline, 'run') and 'explain' in pipeline.run.__code__.co_varnames:
+            result = pipeline.run(query, explain=True)
+        else:
+            result = pipeline.run(query)
     
     _display_result(result)
+
+    # Display explanation if available
+    if explain and result.diagnostics.get("explanation"):
+        exp = result.diagnostics["explanation"]
+        console.print("\n[bold cyan]─── Reasoning Explanation ───[/bold cyan]")
+        console.print(exp.get("reasoning_text", ""))
+        console.print(f"\n[dim]{exp.get('confidence_explanation', '')}[/dim]")
+        if exp.get("path_visualization") and "No graph" not in exp["path_visualization"]:
+            console.print(f"\n[bold]Path Diagram:[/bold]\n{exp['path_visualization']}")
 
 
 def _process_query_stream(pipeline: ActiveRAGPipeline, query: str) -> None:
     """Process query with streaming output."""
     console.print()
-    
+
+    # Check if pipeline has async streaming (AgenticOrchestrator)
+    if isinstance(pipeline, AgenticOrchestrator):
+        # Handle async agent streaming
+        _process_async_stream(pipeline, query)
+        return
+
+    # Handle regular streaming (Legacy/Hybrid pipelines)
+    _process_sync_stream(pipeline, query)
+
+
+def _process_async_stream(pipeline, query: str) -> None:
+    """Handle async streaming from agentic pipeline."""
+    import asyncio
+
+    async def async_stream_handler():
+        console.print()
+        answer_text = ""
+
+        with Live(Panel("", title="[bold green]Answer[/bold green]", border_style="green"),
+                  console=console, refresh_per_second=10) as live:
+
+            async for item in pipeline.run_stream(query):
+                if isinstance(item, dict):
+                    # Handle metadata and tokens from agent
+                    if item.get("type") == "metadata":
+                        path_labels = {
+                            "agent": "[red]🤖 Autonomous Agent[/red]",
+                            "direct": "[green]⚡ Direct Answer[/green]",
+                        }
+                        path = item.get("path", "agent")
+                        console.print(f"[dim]Path: {path_labels.get(path, path)}[/dim]")
+                    elif item.get("type") == "token":
+                        content = item.get("content", "")
+                        answer_text += content
+                        live.update(Panel(
+                            answer_text,
+                            title="[bold green]Answer[/bold green]",
+                            border_style="green",
+                            padding=(1, 2),
+                        ))
+                    elif item.get("type") == "citations":
+                        # We'll display these at the end
+                        pass
+                elif isinstance(item, str):
+                    # Fallback for plain string tokens
+                    answer_text += item
+                    live.update(Panel(
+                        answer_text,
+                        title="[bold green]Answer[/bold green]",
+                        border_style="green",
+                        padding=(1, 2),
+                    ))
+
+        console.print()
+
+    # Run the async handler
+    try:
+        asyncio.run(async_stream_handler())
+    except Exception as e:
+        console.print(f"[red]Streaming error: {e}[/red]")
+        # Fall back to sync mode
+        _process_query_sync(pipeline, query)
+
+
+def _process_sync_stream(pipeline: ActiveRAGPipeline, query: str) -> None:
+    """Handle sync streaming from legacy/hybrid pipelines."""
     # Track metadata from stream
     confidence = None
     path = "direct"
     indexed = 0
     answer_text = ""
     final_result = None
-    
+
     # Stream tokens with live display
-    with Live(Panel("", title="[bold green]Answer[/bold green]", border_style="green"), 
+    with Live(Panel("", title="[bold green]Answer[/bold green]", border_style="green"),
               console=console, refresh_per_second=10) as live:
-        
+
         for item in pipeline.run_stream(query):
             if isinstance(item, str):
                 if item.startswith("__confidence__:"):
@@ -317,14 +471,14 @@ def _process_query_stream(pipeline: ActiveRAGPipeline, query: str) -> None:
                     ))
             elif isinstance(item, PipelineResult):
                 final_result = item
-    
+
     # Show citations if any
     if final_result and final_result.answer.citations:
         console.print()
         console.print("[bold]Sources:[/bold]")
         for url in final_result.answer.citations:
             console.print(f"  [cyan]•[/cyan] [dim]{url}[/dim]")
-    
+
     console.print()
 
 
@@ -343,13 +497,14 @@ def _display_result(result: PipelineResult) -> None:
         print_info("(from cache)")
 
 
-def _interactive_loop(pipeline: ActiveRAGPipeline, stream: bool = True) -> None:
+def _interactive_loop(pipeline: ActiveRAGPipeline, stream: bool = True, explain: bool = False) -> None:
     """Interactive REPL mode with conversation memory."""
     print_banner()
     console.print()
     console.print("[dim]Type your questions below. Commands:[/dim]")
     console.print("[dim]  /clear  - Clear conversation memory[/dim]")
     console.print("[dim]  /cache  - Show cache stats[/dim]")
+    console.print("[dim]  /stats  - Show knowledge system statistics[/dim]")
     console.print("[dim]  /quit   - Exit[/dim]")
     console.print()
     
@@ -373,6 +528,16 @@ def _interactive_loop(pipeline: ActiveRAGPipeline, stream: bool = True) -> None:
             pipeline.clear_memory()
             print_success("Conversation memory cleared!")
             continue
+
+        if query.lower() == "/reset":
+            if hasattr(pipeline, 'clear_database'):
+                if pipeline.clear_database():
+                    print_success("Knowledge base completely wiped!")
+                else:
+                    print_error("Failed to wipe knowledge base.")
+            else:
+                print_warning("Reset not available for this pipeline")
+            continue
         
         if query.lower() == "/cache":
             if pipeline._cache:
@@ -385,8 +550,21 @@ def _interactive_loop(pipeline: ActiveRAGPipeline, stream: bool = True) -> None:
         if query.lower() == "/help":
             console.print("[dim]Commands:[/dim]")
             console.print("[dim]  /clear  - Clear conversation memory[/dim]")
+            console.print("[dim]  /reset  - Wipe entire knowledge base (Neo4j)[/dim]")
             console.print("[dim]  /cache  - Show cache stats[/dim]")
+            console.print("[dim]  /dump   - Dump all learned chunks[/dim]")
+            console.print("[dim]  /stats  - Show knowledge system statistics[/dim]")
             console.print("[dim]  /quit   - Exit[/dim]")
+            continue
+
+        if query.lower() == "/stats":
+            if hasattr(pipeline, 'get_knowledge_stats'):
+                stats = pipeline.get_knowledge_stats()
+                print_info("📊 Knowledge System Statistics:")
+                for system, data in stats.items():
+                    console.print(f"  {system.title()}: {data}")
+            else:
+                print_warning("Stats not available for this pipeline")
             continue
         
         # Process the query

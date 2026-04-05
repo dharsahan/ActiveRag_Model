@@ -77,78 +77,86 @@ class GraphOperations:
         """Execute multi-hop reasoning query using NLP to extract entities"""
         # Extract entities from query text
         from ..schemas.entities import ContentDomain
-        entities = self.entity_extractor.extract_entities(query_text, ContentDomain.MIXED_WEB)
+        query_entities = self.entity_extractor.extract_entities(query_text, ContentDomain.MIXED_WEB)
 
-        if not entities:
+        if not query_entities:
             return {"entities": [], "paths": [], "reasoning": "No entities found in query"}
 
-        # Start with first entity and explore outward
-        start_entity_id = entities[0]["properties"]["id"]
+        all_neighbors = []
+        all_paths = []
+        start_entity_ids = []
 
-        # Inline entity neighborhood logic
-        # Validate radius to prevent injection
-        if not isinstance(max_hops, int) or max_hops < 1 or max_hops > 10:
-            raise ValueError(f"Invalid max_hops: {max_hops}. Must be integer between 1 and 10")
-
-        radius_range = "1.." + str(max_hops)
-        neighborhood_query = """
-        MATCH (center {id: $entity_id})
-        MATCH path = (center)-[*""" + radius_range + """]-(neighbor)
-        WITH neighbor, min(length(path)) as distance
-        RETURN neighbor, distance, labels(neighbor) as entity_labels
-        ORDER BY distance, neighbor.name
-        LIMIT $limit
-        """
-
-        neighbors = []
+        # Try to find all query entities in the database
         with self.client._driver.session() as session:
-            result = session.run(neighborhood_query, entity_id=start_entity_id, limit=100)
+            for q_ent in query_entities:
+                entity_name = q_ent["properties"]["name"]
+                entity_label = q_ent["label"]
 
-            for record in result:
-                neighbor = dict(record["neighbor"])
-                neighbor["distance"] = record["distance"]
-                neighbor["labels"] = record["entity_labels"]
-                neighbors.append(neighbor)
+                search_query = f"""
+                MATCH (n:{entity_label})
+                WHERE n.name = $entity_name
+                RETURN n.id as entity_id
+                ORDER BY n.id
+                LIMIT 1
+                """
+                result = session.run(search_query, entity_name=entity_name)
+                record = result.single()
+                
+                if record:
+                    start_entity_ids.append(record["entity_id"])
 
-        # Inline entity filtering logic
-        relevant_entities = []
+        if not start_entity_ids:
+            return {"entities": [], "paths": [], "reasoning": f"None of the query entities were found in database"}
+
+        # Combine neighborhoods from all start entities
+        for start_id in start_entity_ids:
+            neighbors = self.get_entity_neighborhood(start_id, radius=max_hops)
+            all_neighbors.extend(neighbors)
+
+        # Deduplicate and score neighbors
+        unique_neighbors = {}
         query_lower = query_text.lower()
+        target_names = {entity["properties"]["name"].lower() for entity in query_entities}
 
-        # If we have target entities from the query, prioritize matches
-        target_names = {entity["properties"]["name"].lower() for entity in entities[1:] if len(entities) > 1}
-
-        for entity in neighbors:
+        for entity in all_neighbors:
+            eid = entity["id"]
+            if eid in start_entity_ids:
+                continue # Skip the start entities themselves
+                
             entity_name = entity.get("name", "").lower()
-
-            # High relevance: exact matches with target entities
+            
+            # Basic score based on distance
+            relevance = 0.3 if entity.get("distance", 10) <= 2 else 0.1
+            
+            # Boost if name matches query
             if entity_name in target_names:
-                entity["relevance_score"] = 1.0
-                relevant_entities.append(entity)
-            # Medium relevance: entity name appears in query
-            elif any(word in entity_name for word in query_lower.split()):
-                entity["relevance_score"] = 0.7
-                relevant_entities.append(entity)
-            # Lower relevance: entity is close to start (low distance)
-            elif entity.get("distance", 10) <= 2:
-                entity["relevance_score"] = 0.3
-                relevant_entities.append(entity)
+                relevance = 1.0
+            elif any(word in entity_name for word in query_lower.split() if len(word) > 2):
+                relevance = 0.7
+                
+            entity["relevance_score"] = relevance
+            
+            if eid not in unique_neighbors or relevance > unique_neighbors[eid].get("relevance_score", 0):
+                unique_neighbors[eid] = entity
 
-        # Sort by relevance score and distance
+        relevant_entities = list(unique_neighbors.values())
         relevant_entities.sort(key=lambda x: (-x.get("relevance_score", 0), x.get("distance", 0)))
-        relevant_entities = relevant_entities[:20]  # Return top 20 most relevant
+        relevant_entities = relevant_entities[:20]
 
-        # Find paths between start entity and relevant entities
-        paths = []
-        for target_entity in relevant_entities[:5]:  # Limit to top 5 for performance
-            entity_paths = self.find_paths(start_entity_id, target_entity["id"], max_depth=max_hops)
-            for path in entity_paths:
-                path["target_entity"] = target_entity
-                paths.append(path)
+        # Find paths between start entities and relevant entities
+        for start_id in start_entity_ids:
+            for target_entity in relevant_entities[:5]:
+                if start_id == target_entity["id"]:
+                    continue
+                entity_paths = self.find_paths(start_id, target_entity["id"], max_depth=max_hops)
+                for path in entity_paths:
+                    path["target_entity"] = target_entity
+                    all_paths.append(path)
 
         return {
             "entities": relevant_entities,
-            "paths": paths,
-            "reasoning": f"Found {len(relevant_entities)} relevant entities with {len(paths)} connection paths"
+            "paths": all_paths,
+            "reasoning": f"Searched from {len(start_entity_ids)} entities. Found {len(relevant_entities)} relevant neighbors with {len(all_paths)} paths."
         }
 
     def get_graph_stats(self) -> Dict[str, Any]:

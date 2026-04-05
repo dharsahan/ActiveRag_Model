@@ -191,6 +191,28 @@ class EntityExtractor:
                     }
                 })
 
+        # Fallback: Extract single-letter entities (A, B, C) in relationship contexts
+        # Patterns like "A is the mom", "between B and C"
+        short_person_patterns = [
+            r'\b([A-Z])\s+is\b',
+            r'\bof\s+([A-Z])\b',
+            r'\band\s+([A-Z])\b',
+            r'\b([A-Z])\s+and\b',
+            r'\b([A-Z])\s+for\b'
+        ]
+        
+        text = doc.text
+        for pattern in short_person_patterns:
+            for match in re.finditer(pattern, text):
+                name = match.group(1)
+                entities.append({
+                    "label": "Person",
+                    "properties": {
+                        "name": name,
+                        "id": self._generate_id("person", name)
+                    }
+                })
+
         return entities
 
     def _generate_id(self, entity_type: str, name: str) -> str:
@@ -309,13 +331,23 @@ class EntityExtractor:
         return concepts[:5]
 
     def _deduplicate_entities(self, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Remove duplicate entities based on ID"""
+        """Remove duplicate entities based on ID and filter out common roles"""
         seen_ids = set()
         deduped = []
+        
+        # Terms that are likely roles or descriptions rather than specific names
+        stop_names = {
+            "grandmother", "grandfather", "grandchild", "grandson", "granddaughter",
+            "mother", "father", "mom", "dad", "parent", "child", "son", "daughter",
+            "brother", "sister", "sibling", "uncle", "aunt", "cousin",
+            "manager", "director", "ceo", "cto", "employee", "user", "assistant"
+        }
 
         for entity in entities:
             entity_id = entity["properties"]["id"]
-            if entity_id not in seen_ids:
+            entity_name = entity["properties"].get("name", "").lower()
+            
+            if entity_id not in seen_ids and entity_name not in stop_names:
                 seen_ids.add(entity_id)
                 deduped.append(entity)
 

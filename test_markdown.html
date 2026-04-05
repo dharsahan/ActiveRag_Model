@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Markdown Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { border: 1px solid #ccc; margin: 10px 0; padding: 10px; }
+        .original { background-color: #f0f0f0; }
+        .rendered { background-color: #e8f5e8; }
+        h1, h2, h3 { color: #333; }
+        ul, ol { margin: 0.5em 0; padding-left: 1.5em; }
+        li { margin: 0.25em 0; }
+        strong { font-weight: bold; }
+        em { font-style: italic; }
+        code { background: #f4f4f4; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>Markdown Rendering Test</h1>
+
+    <div id="test-container"></div>
+
+    <script>
+        const renderMarkdown = (text) => {
+            if (!text) return '';
+
+            // Simple markdown parsing for common elements
+            let html = text
+                // Headers
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                // Bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/__(.*?)__/g, '<strong>$1</strong>')
+                // Italic
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/_(.*?)_/g, '<em>$1</em>')
+                // Code
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                // Lists - handle bullet points
+                .replace(/^\s*[-*+]\s+(.*)$/gm, '<li>$1</li>')
+                // Numbered lists
+                .replace(/^\s*\d+\.\s+(.*)$/gm, '<li>$1</li>')
+                // Line breaks
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+
+            // Wrap in paragraph tags if not already wrapped
+            if (!html.includes('<h') && !html.includes('<li>')) {
+                html = '<p>' + html + '</p>';
+            }
+
+            // Wrap consecutive list items in ul tags
+            html = html.replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, '<ul>$1</ul>');
+
+            return html;
+        };
+
+        const testCases = [
+            {
+                name: "Headers and Text",
+                input: `# Main Header
+## Sub Header
+### Small Header
+
+This is regular text with **bold** and *italic* elements.
+
+Another paragraph here.`
+            },
+            {
+                name: "Lists",
+                input: `Here are some benefits:
+
+- First benefit
+- Second benefit
+- Third benefit
+
+And numbered list:
+
+1. Step one
+2. Step two
+3. Step three`
+            },
+            {
+                name: "Code and Mixed Content",
+                input: `## Code Example
+
+Use the \`print()\` function in Python:
+
+- Simple and **easy** to use
+- Very *flexible*
+- Great for debugging
+
+**Important**: Always test your code!`
+            }
+        ];
+
+        const container = document.getElementById('test-container');
+
+        testCases.forEach(testCase => {
+            const testDiv = document.createElement('div');
+            testDiv.innerHTML = `
+                <h2>Test: ${testCase.name}</h2>
+                <div class="test-result original">
+                    <h3>Original Markdown:</h3>
+                    <pre>${testCase.input}</pre>
+                </div>
+                <div class="test-result rendered">
+                    <h3>Rendered HTML:</h3>
+                    ${renderMarkdown(testCase.input)}
+                </div>
+            `;
+            container.appendChild(testDiv);
+        });
+    </script>
+</body>
+</html>

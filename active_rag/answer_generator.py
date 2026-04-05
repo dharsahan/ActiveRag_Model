@@ -8,6 +8,7 @@ Provides two generation paths that mirror the architecture diagram:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import Generator
 
@@ -64,13 +65,19 @@ class AnswerGenerator:
     def generate_direct(self, query: str, conversation_context: str = "") -> Answer:
         """Answer *query* directly without any retrieval context."""
         system_content = (
-            "You are a helpful assistant. Answer the user's "
-            "question directly and concisely."
+            "You are a helpful assistant. Answer the user's question directly and concisely. "
+            "Always format your responses clearly using markdown:\n"
+            "- Use bullet points for lists\n"
+            "- Use **bold** for emphasis\n"
+            "- Use headers (## Header) for sections when appropriate\n"
+            "- Use proper paragraphs with line breaks\n"
+            "- Keep responses well-structured and readable\n"
+            "Provide clear, well-formatted answers."
         )
-        
+
         if conversation_context:
             system_content += f"\n\nConversation context:\n{conversation_context}"
-        
+
         response = self._client.chat.completions.create(
             model=self._config.model_name,
             messages=[
@@ -79,7 +86,11 @@ class AnswerGenerator:
             ],
             temperature=0.3,
         )
-        text = response.choices[0].message.content or ""
+        if response.choices:
+            text = response.choices[0].message.content or ""
+        else:
+            text = ""
+        text = self._post_process_response(text)
         return Answer(text=text, citations=[], source="direct")
 
     def generate_direct_stream(
@@ -87,13 +98,19 @@ class AnswerGenerator:
     ) -> Generator[str, None, Answer]:
         """Stream answer tokens for *query* directly without retrieval."""
         system_content = (
-            "You are a helpful assistant. Answer the user's "
-            "question directly and concisely."
+            "You are a helpful assistant. Answer the user's question directly and concisely. "
+            "Always format your responses clearly using markdown:\n"
+            "- Use bullet points for lists\n"
+            "- Use **bold** for emphasis\n"
+            "- Use headers (## Header) for sections when appropriate\n"
+            "- Use proper paragraphs with line breaks\n"
+            "- Keep responses well-structured and readable\n"
+            "Provide clear, well-formatted answers."
         )
-        
+
         if conversation_context:
             system_content += f"\n\nConversation context:\n{conversation_context}"
-        
+
         response = self._client.chat.completions.create(
             model=self._config.model_name,
             messages=[
@@ -103,14 +120,15 @@ class AnswerGenerator:
             temperature=0.3,
             stream=True,
         )
-        
+
         full_text = ""
         for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
                 token = chunk.choices[0].delta.content
                 full_text += token
                 yield token
-        
+
+        full_text = self._post_process_response(full_text)
         return Answer(text=full_text, citations=[], source="direct")
 
     # ------------------------------------------------------------------
@@ -130,14 +148,18 @@ class AnswerGenerator:
         context_block = "\n\n".join(
             f"[Source: {r.source_url}]\n{r.content}" for r in context_results
         )
-        
+
         system_content = (
-            "You are a helpful assistant. Answer the user's "
-            "question using ONLY the provided context. "
-            "Include citations in your answer by referencing "
-            "the source URLs provided with each context block."
+            "You are a helpful assistant. Answer the user's question using ONLY the provided context. "
+            "Always format your responses clearly using markdown:\n"
+            "- Use bullet points for lists\n"
+            "- Use **bold** for emphasis\n"
+            "- Use headers (## Header) for sections when appropriate\n"
+            "- Use proper paragraphs with line breaks\n"
+            "- Keep responses well-structured and readable\n"
+            "Include citations in your answer by referencing the source URLs provided with each context block."
         )
-        
+
         if conversation_context:
             system_content += f"\n\nConversation context:\n{conversation_context}"
 
@@ -155,7 +177,11 @@ class AnswerGenerator:
             ],
             temperature=0.3,
         )
-        text = response.choices[0].message.content or ""
+        if response.choices:
+            text = response.choices[0].message.content or ""
+        else:
+            text = ""
+        text = self._post_process_response(text)
         citations = list(
             dict.fromkeys(r.source_url for r in context_results if r.source_url)
         )
@@ -171,14 +197,18 @@ class AnswerGenerator:
         context_block = "\n\n".join(
             f"[Source: {r.source_url}]\n{r.content}" for r in context_results
         )
-        
+
         system_content = (
-            "You are a helpful assistant. Answer the user's "
-            "question using ONLY the provided context. "
-            "Include citations in your answer by referencing "
-            "the source URLs provided with each context block."
+            "You are a helpful assistant. Answer the user's question using ONLY the provided context. "
+            "Always format your responses clearly using markdown:\n"
+            "- Use bullet points for lists\n"
+            "- Use **bold** for emphasis\n"
+            "- Use headers (## Header) for sections when appropriate\n"
+            "- Use proper paragraphs with line breaks\n"
+            "- Keep responses well-structured and readable\n"
+            "Include citations in your answer by referencing the source URLs provided with each context block."
         )
-        
+
         if conversation_context:
             system_content += f"\n\nConversation context:\n{conversation_context}"
 
@@ -197,15 +227,42 @@ class AnswerGenerator:
             temperature=0.3,
             stream=True,
         )
-        
+
         full_text = ""
         for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
                 token = chunk.choices[0].delta.content
                 full_text += token
                 yield token
-        
+
+        full_text = self._post_process_response(full_text)
         citations = list(
             dict.fromkeys(r.source_url for r in context_results if r.source_url)
         )
         return Answer(text=full_text, citations=citations, source="rag")
+
+    def _post_process_response(self, text: str) -> str:
+        """Post-process response text to ensure good formatting."""
+        if not text:
+            return text
+
+        # Fix common formatting issues
+        text = text.strip()
+
+        # Ensure proper spacing around headers
+        text = re.sub(r'(?<!^)(\n#{1,6}\s)', r'\n\n\1', text, flags=re.MULTILINE)
+        text = re.sub(r'(#{1,6}.*?)(\n)(?!\n)', r'\1\n\n', text)
+
+        # Fix bullet points formatting
+        text = re.sub(r'\n([*-])\s*([^\n]+)', r'\n\1 \2', text)
+
+        # Fix numbered lists
+        text = re.sub(r'\n(\d+\.)\s*([^\n]+)', r'\n\1 \2', text)
+
+        # Clean up multiple newlines but preserve intentional breaks
+        text = re.sub(r'\n{3,}', '\n\n', text)
+
+        # Ensure proper spacing after periods in lists
+        text = re.sub(r'\.([A-Z])', r'. \1', text)
+
+        return text.strip()
