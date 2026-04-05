@@ -496,58 +496,55 @@ class AgenticOrchestrator:
         # Use the shared neo4j client to avoid creating new connections
         neo4j_client = self._vector_tool._store._neo4j
 
-        # 1. Index into Vector Store (Neo4j)
+        # 1. Analyze Sentiment
+        try:
+            from active_rag.nlp_pipeline.entity_extractor import EntityExtractor
+            extractor = EntityExtractor()
+            sentiment = extractor.analyze_sentiment(answer)
+            logger.info(f"Interaction sentiment: {sentiment['label']} ({sentiment['score']})")
+        except Exception:
+            sentiment = {"label": "neutral", "score": 0.0}
+
+        # 2. Index into Vector Store (Neo4j)
         chunk_ids = []
         try:
             chunk_ids = self._vector_tool._store.add_documents(
                 contents=[interaction_text],
                 source_urls=["Chat History"]
             )
-            # Add metadata if possible (VectorStore needs support for more meta)
             logger.info(f"Interaction indexed into vector store (ID: {chunk_ids}).")
         except Exception as e:
             logger.warning(f"Failed to index interaction: {e}")
 
-        # 2. Extract entities and update Graph (Neo4j)
+        # 3. Extract entities and update Graph (Neo4j)
         extracted_entities = []
         try:
-            from active_rag.nlp_pipeline.entity_extractor import EntityExtractor
             from active_rag.schemas.entities import ContentDomain
-            
-            extractor = EntityExtractor()
             extracted_entities = extractor.extract_entities(interaction_text, ContentDomain.MIXED_WEB)
             
-            for entity in extracted_entities[:5]: # Limit to top 5 entities per interaction
+            for entity in extracted_entities:
                 try:
                     props = entity["properties"].copy()
                     props["source"] = "chat_interaction"
                     props["source_type"] = "chat"
+                    props["sentiment"] = sentiment["label"]
                     props["timestamp"] = time.time()
                     neo4j_client.create_entity(entity["label"], props)
-                    
-                    # Link Chunk to Entity (MENTIONS)
-                    if chunk_ids:
-                        for cid in chunk_ids:
-                            neo4j_client.create_relationship(
-                                subject_id=cid,
-                                subject_label="Chunk",
-                                predicate="MENTIONS",
-                                object_id=props["id"],
-                                object_label=entity["label"],
-                                properties={"context": "chat_history"}
-                            )
                 except Exception:
                     continue
-            logger.info(f"Knowledge graph enriched with {len(extracted_entities[:5])} entities from chat.")
+            logger.info(f"Knowledge graph enriched with {len(extracted_entities)} entities/topics from chat.")
         except Exception as e:
             logger.warning(f"Failed to update entities from chat: {e}")
 
-        # 3. Extract and create relationships between entities
-        if extracted_entities and len(extracted_entities) >= 2:
+        # 4. Extract and create dynamic relationships (including Chunk -> Entity)
+        if extracted_entities:
             try:
                 from active_rag.nlp_pipeline.relation_extractor import RelationExtractor
                 rel_extractor = RelationExtractor(self._config)
-                relations = rel_extractor.extract_relations(interaction_text, extracted_entities)
+                
+                # Pass chunk_id to allow dynamic relationships like Chunk -[DEFINES]-> Entity
+                cid = chunk_ids[0] if chunk_ids else None
+                relations = rel_extractor.extract_relations(interaction_text, extracted_entities, chunk_id=cid)
                 
                 for rel in relations:
                     try:
@@ -561,7 +558,7 @@ class AgenticOrchestrator:
                         )
                     except Exception:
                         continue
-                logger.info(f"Extracted {len(relations)} new relationships from chat.")
+                logger.info(f"Extracted {len(relations)} dynamic relationships from chat.")
             except Exception as e:
                 logger.warning(f"Failed to extract relationships from chat: {e}")
 

@@ -14,16 +14,18 @@ You are a Knowledge Graph specialist. Your task is to extract relationships betw
 
 GUIDELINES:
 1. Identify clear relationships between the provided entities.
-2. The predicate (relationship type) should be concise, in UPPERCASE_WITH_UNDERSCORES (e.g., MOM_OF, WORKS_AT, DEPENDS_ON).
-3. Be as specific as possible. 
+2. If a "Chunk" ID is provided, determine the most descriptive relationship between that Chunk and the entities it contains.
+   - Instead of just 'MENTIONS', use verbs like: 'DEFINES', 'DISCUSSES', 'REPORTS', 'CRITICIZES', 'LAUDS', 'EXPLAINS'.
+3. The predicate (relationship type) should be a concise verb, in UPPERCASE_WITH_UNDERSCORES.
+4. Be as specific as possible. 
 
 Return ONLY a JSON object with a "relationships" key containing a list of objects with this structure:
 {
   "relationships": [
     {
-      "subject_id": "id_of_subject",
-      "subject_label": "Person",
-      "predicate": "MOM_OF",
+      "subject_id": "id_of_subject", 
+      "subject_label": "Chunk",
+      "predicate": "EXPLAINS",
       "object_id": "id_of_object",
       "object_label": "Person",
       "properties": {"certainty": 0.9}
@@ -45,19 +47,26 @@ class RelationExtractor:
             api_key=config.api_key,
         )
 
-    def extract_relations(self, text: str, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Extract relationships between the provided entities from text."""
-        if not text or not entities or len(entities) < 2:
-            # Need at least two entities to have a relationship
+    def extract_relations(self, text: str, entities: List[Dict[str, Any]], chunk_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Extract relationships between the provided entities (and optionally a Chunk) from text."""
+        if not text or not entities:
             return []
 
         # Prepare context for the LLM
+        entity_list = entities.copy()
+        if chunk_id:
+            # Add the Chunk as a virtual entity for the LLM to relate to others
+            entity_list.append({
+                "label": "Chunk",
+                "properties": {"id": chunk_id, "name": "The provided text chunk"}
+            })
+
         entity_context = "\n".join([
             f"- {e['properties']['id']} ({e['label']}): {e['properties'].get('name', '')}"
-            for e in entities
+            for e in entity_list
         ])
 
-        prompt = f"Text:\n{text}\n\nEntities Found:\n{entity_context}\n\nExtract relationships in JSON format:"
+        prompt = f"Text:\n{text}\n\nEntities to link:\n{entity_context}\n\nExtract relationships in JSON format:"
 
         try:
             response = self._client.chat.completions.create(

@@ -116,24 +116,15 @@ class WebBrowserTool:
                             props["query"] = query
                             
                             self._graph_client.create_entity(entity["label"], props)
-                            
-                            # Link Chunk to Entity (MENTIONS)
-                            if i in chunk_ids_map:
-                                for cid in chunk_ids_map[i]:
-                                    self._graph_client.create_relationship(
-                                        subject_id=cid,
-                                        subject_label="Chunk",
-                                        predicate="MENTIONS",
-                                        object_id=props["id"],
-                                        object_label=entity["label"],
-                                        properties={"context": "web_scrape"}
-                                    )
                         except Exception:
                             continue
                     
-                    # Extract and create relationships between entities
-                    if len(entities) >= 2:
-                        relations = rel_extractor.extract_relations(page.content, entities)
+                    # Extract and create dynamic relationships (including Chunk -> Entity)
+                    if entities:
+                        # Use first chunk ID from this page if available
+                        cid = chunk_ids_map[i][0] if i in chunk_ids_map and chunk_ids_map[i] else None
+                        relations = rel_extractor.extract_relations(page.content, entities, chunk_id=cid)
+                        
                         for rel in relations:
                             try:
                                 self._graph_client.create_relationship(

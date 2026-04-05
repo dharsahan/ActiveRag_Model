@@ -203,21 +203,59 @@ def main(argv: list[str] | None = None) -> None:
                 print_warning("No documents to export.")
             return
 
-    # Handle document ingestion (no LLM needed)
+    # Handle document ingestion (no LLM needed for vectors, but uses LLM for graph)
     if args.ingest:
         from active_rag.document_loader import DocumentLoader
         from active_rag.vector_store import VectorStore
+        from active_rag.nlp_pipeline.entity_extractor import EntityExtractor
+        from active_rag.nlp_pipeline.relation_extractor import RelationExtractor
+        from active_rag.schemas.entities import ContentDomain
+        
         loader = DocumentLoader()
         store = VectorStore(config)
+        extractor = EntityExtractor()
+        rel_extractor = RelationExtractor(config)
+        
         for filepath in args.ingest:
             try:
                 with status_spinner(f"Ingesting {filepath}..."):
                     docs = loader.load(filepath)
-                    store.add_documents(
-                        contents=[d.content for d in docs],
-                        source_urls=[d.source for d in docs],
-                    )
-                print_success(f"Ingested {len(docs)} chunk(s) from {filepath}")
+                    for d in docs:
+                        # 1. Add to Vector Store
+                        chunk_ids = store.add_documents(
+                            contents=[d.content],
+                            source_urls=[d.source],
+                        )
+                        
+                        # 2. Extract Entities
+                        entities = extractor.extract_entities(d.content, ContentDomain.TECHNICAL)
+                        for entity in entities[:10]:
+                            try:
+                                props = entity["properties"].copy()
+                                props["source_file"] = d.source
+                                props["source_type"] = "ingestion"
+                                store._neo4j.create_entity(entity["label"], props)
+                            except Exception:
+                                continue
+                        
+                        # 3. Extract Dynamic Relationships (including Chunk -> Entity)
+                        if entities:
+                            cid = chunk_ids[0] if chunk_ids else None
+                            relations = rel_extractor.extract_relations(d.content, entities, chunk_id=cid)
+                            for rel in relations:
+                                try:
+                                    store._neo4j.create_relationship(
+                                        subject_id=rel["subject_id"],
+                                        subject_label=rel["subject_label"],
+                                        predicate=rel["predicate"],
+                                        object_id=rel["object_id"],
+                                        object_label=rel["object_label"],
+                                        properties=rel.get("properties", {})
+                                    )
+                                except Exception:
+                                    continue
+                                
+                print_success(f"Ingested and dynamically enriched {len(docs)} chunk(s) from {filepath}")
             except (FileNotFoundError, ValueError) as e:
                 print_error(str(e))
         return
@@ -334,7 +372,7 @@ def _process_query(
         if isinstance(pipeline, AgenticOrchestrator):
             print_info("📂 Memory Dump:")
             result = pipeline._list_memory_tool.execute({})
-            console.print(result)
+            console.print(result, markup=False)
         else:
             print_warning("/dump is only available for the Agentic pipeline")
         return

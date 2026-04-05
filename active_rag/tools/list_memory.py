@@ -35,6 +35,8 @@ class ListMemoryTool:
             for doc_info in all_docs:
                 src = doc_info.get("source_url", "Unknown Source")
                 content = doc_info.get("content", "")
+                # Escape square brackets for Rich
+                src = src.replace("[", "[[").replace("]", "]]")
                 snippets.append(f"[{src}]: {content}")
                 
             return "Current Database Index Dump:\n\n" + "\n---\n".join(snippets)
