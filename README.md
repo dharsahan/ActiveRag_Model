@@ -16,32 +16,32 @@ An advanced **Autonomous GraphRAG Agent** that unifies vector similarity and rel
 
 ```mermaid
 graph TD
-    User([User Query]) --> Agent[<b>Agentic Orchestrator</b><br/>ReAct Reasoning Loop]
-    
+    User([User Query]) --> Agent[Agentic Orchestrator\nReAct Reasoning Loop]
+
     subgraph Tools [Dynamic Toolset]
-        Agent <--> Web[<b>Web Browser</b><br/>DDG + Playwright]
-        Agent <--> VectorTool[<b>query_memory</b><br/>Similarity Search]
-        Agent <--> GraphTool[<b>graph_query</b><br/>Multi-hop Logic]
-        Agent --> Store[<b>store_memory</b><br/>Fact Injection]
-        Agent --> Calc[<b>calculator</b><br/>Math Engine]
+        Agent <--> Web[Web Browser\nDDG + Playwright]
+        Agent <--> VectorTool[query_memory\nSimilarity Search]
+        Agent <--> GraphTool[graph_query\nMulti-hop Logic]
+        Agent --> Store[store_memory\nFact Injection]
+        Agent --> Calc[calculator\nMath Engine]
     end
-    
+
     subgraph Learning [Continuous Learning Loop]
         Web -- 1. Scrape --> Content[Raw Text]
         Content -- 2. Index --> Neo4jVector
-        Content -- 3. NLP Entity Extraction --> Entities[Nodes & Relations]
+        Content -- 3. NLP Entity Extraction --> Entities[Nodes and Relations]
         Entities -- 4. Upsert --> Neo4jGraph
     end
-    
-    subgraph Unified Storage [Neo4j Graph Database]
+
+    subgraph Unified [Neo4j Graph Database]
         Neo4jVector[(Vector Index)]
         Neo4jGraph[(Knowledge Graph)]
     end
-    
+
     VectorTool <--> Neo4jVector
     GraphTool <--> Neo4jGraph
     Store --> Neo4jVector
-    
+
     Agent --> Answer[Final Answer + Citations]
     Answer --> User
 ```
