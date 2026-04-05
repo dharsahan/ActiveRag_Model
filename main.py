@@ -171,10 +171,9 @@ def main(argv: list[str] | None = None) -> None:
         store = VectorStore(config)
         
         if args.db_stats:
-            count = store._collection.count()
-            print_info(f"Documents: {count}")
-            print_info(f"Collection: {config.collection_name}")
-            print_info(f"Persist dir: {config.chroma_persist_dir}")
+            count = store.count()
+            print_info(f"Chunks in Graph: {count}")
+            print_info(f"Vector Index: {config.vector_index_name}")
             return
             
         if args.db_search:
@@ -189,20 +188,19 @@ def main(argv: list[str] | None = None) -> None:
             return
             
         if args.db_clear:
-            store._client.delete_collection(config.collection_name)
-            print_success("Vector store cleared!")
+            store.clear()
+            print_success("Vector store (Chunks) cleared!")
             return
             
         if args.db_export:
             import json
-            all_data = store._collection.get(include=["documents", "metadatas"])
-            export = []
-            if all_data and all_data.get("documents"):
-                for doc, meta in zip(all_data["documents"], all_data["metadatas"]):
-                    export.append({"content": doc, "metadata": meta})
-            with open(args.db_export, "w") as f:
-                json.dump(export, f, indent=2)
-            print_success(f"Exported {len(export)} documents to {args.db_export}")
+            all_data = store.get_all_documents()
+            if all_data:
+                with open(args.db_export, "w") as f:
+                    json.dump(all_data, f, indent=2)
+                print_success(f"Exported {len(all_data)} documents to {args.db_export}")
+            else:
+                print_warning("No documents to export.")
             return
 
     # Handle document ingestion (no LLM needed)
@@ -324,6 +322,11 @@ def _process_query(
                 print_error("Failed to wipe knowledge base.")
         else:
             print_warning("Reset not available for this pipeline")
+        return
+
+    if cmd == "/health":
+        import subprocess
+        subprocess.run([sys.executable, "scripts/health_check.py"])
         return
 
     if cmd == "/dump":
@@ -538,6 +541,11 @@ def _interactive_loop(pipeline: ActiveRAGPipeline, stream: bool = True, explain:
             else:
                 print_warning("Reset not available for this pipeline")
             continue
+
+        if query.lower() == "/health":
+            import subprocess
+            subprocess.run([sys.executable, "scripts/health_check.py"])
+            continue
         
         if query.lower() == "/cache":
             if pipeline._cache:
@@ -551,6 +559,7 @@ def _interactive_loop(pipeline: ActiveRAGPipeline, stream: bool = True, explain:
             console.print("[dim]Commands:[/dim]")
             console.print("[dim]  /clear  - Clear conversation memory[/dim]")
             console.print("[dim]  /reset  - Wipe entire knowledge base (Neo4j)[/dim]")
+            console.print("[dim]  /health - Run system health check[/dim]")
             console.print("[dim]  /cache  - Show cache stats[/dim]")
             console.print("[dim]  /dump   - Dump all learned chunks[/dim]")
             console.print("[dim]  /stats  - Show knowledge system statistics[/dim]")

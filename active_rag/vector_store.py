@@ -250,3 +250,13 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Failed to retrieve all documents: {e}")
             return []
+
+    def clear(self) -> None:
+        """Wipe all Chunk nodes and their relationships from Neo4j."""
+        query = "MATCH (n:Chunk) DETACH DELETE n"
+        try:
+            with self._neo4j._driver.session() as session:
+                session.run(query)
+                logger.info("All Chunk nodes cleared from Neo4j.")
+        except Exception as e:
+            logger.error(f"Failed to clear chunks: {e}")

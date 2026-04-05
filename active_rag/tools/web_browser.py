@@ -111,6 +111,7 @@ class WebBrowserTool:
                         try:
                             props = entity["properties"].copy()
                             props["source_url"] = page.url
+                            props["source_type"] = "web"
                             props["discovered_via"] = "web_browser_tool"
                             props["query"] = query
                             

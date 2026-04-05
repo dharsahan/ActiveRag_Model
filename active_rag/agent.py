@@ -503,6 +503,7 @@ class AgenticOrchestrator:
                 contents=[interaction_text],
                 source_urls=["Chat History"]
             )
+            # Add metadata if possible (VectorStore needs support for more meta)
             logger.info(f"Interaction indexed into vector store (ID: {chunk_ids}).")
         except Exception as e:
             logger.warning(f"Failed to index interaction: {e}")
@@ -520,6 +521,7 @@ class AgenticOrchestrator:
                 try:
                     props = entity["properties"].copy()
                     props["source"] = "chat_interaction"
+                    props["source_type"] = "chat"
                     props["timestamp"] = time.time()
                     neo4j_client.create_entity(entity["label"], props)
                     
