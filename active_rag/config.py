@@ -28,7 +28,8 @@ class Config:
             self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", cfg["base_url"])
             
         if self.model_name is None:
-            self.model_name = os.getenv("MODEL_NAME", cfg["default_model"])
+            val = os.getenv("MODEL_NAME", cfg["default_model"])
+            self.model_name = val.strip() if val else val
             
         if self.api_key is None:
             if "api_key_env" in cfg:

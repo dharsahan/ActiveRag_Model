@@ -1,0 +1,54 @@
+<h2>Refining the ActiveRAG Platform</h2>
+<p class="subtitle">Exposing deep knowledge and reasoning features as standalone API services.</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="query_features" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Advanced Query Features</h3>
+      <p>Multi-hop reasoning, Explainability (source breakdown, path viz), and Graph visualization.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="nlp_services" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Standalone NLP Services</h3>
+      <p>Entity extraction, Document classification, Relation mapping, and Sentiment analysis.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="graph_analytics" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Knowledge Graph Analytics</h3>
+      <p>Community detection (clustering), Entity neighborhood search, and Schema management.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="kb_management" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Rich KB Management</h3>
+      <p>Batch ingestion, Document listing, and Granular deletion/update controls.</p>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">New API Structure Suggestion</div>
+  <div class="mockup-body">
+    <div class="mock-nav">ActiveRAG API | /query | /nlp | /graph | /kb | /system</div>
+    <div style="display: flex; gap: 20px; padding: 10px;">
+      <div class="mock-sidebar" style="width: 200px;">
+        <div style="padding: 10px; border-bottom: 1px solid #ddd;"><b>Endpoints</b></div>
+        <div style="padding: 10px; opacity: 0.7;">POST /query</div>
+        <div style="padding: 10px; background: #eee;">POST /nlp/extract</div>
+        <div style="padding: 10px; opacity: 0.7;">GET /graph/communities</div>
+        <div style="padding: 10px; opacity: 0.7;">POST /kb/batch</div>
+      </div>
+      <div class="mock-content" style="flex: 1;">
+        <h3>Service Spotlight: Standalone Extraction</h3>
+        <p>Current internal tools like <code>EntityExtractor</code> and <code>RelationExtractor</code> will be exposed so apps can process data before storing it.</p>
+        <button class="mock-button">Try Test Extraction</button>
+      </div>
+    </div>
+  </div>
+</div>

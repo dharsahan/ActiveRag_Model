@@ -5,7 +5,7 @@ from __future__ import annotations
 _PROVIDERS: dict[str, dict[str, str]] = {
     "nvidia": {
         "base_url": "https://integrate.api.nvidia.com/v1",
-        "default_model": "stepfun-ai/step-3.5-flash",
+        "default_model": "nvidia/llama-3.1-70b-instruct",
         "api_key_env": "NVIDIA_API_KEY",
     },
     "ollama": {
@@ -14,8 +14,8 @@ _PROVIDERS: dict[str, dict[str, str]] = {
         "api_key": "ollama",
     },
     "openai": {
-        "base_url": "https://api.openai.com/v1",
-        "default_model": "gpt-4-turbo",
+        "base_url": "http://localhost:4141/v1",
+        "default_model": "gpt-4o",
         "api_key_env": "OPENAI_API_KEY",
     },
     "groq": {
@@ -30,7 +30,7 @@ _PROVIDERS: dict[str, dict[str, str]] = {
     },
     "local":{
         "base_url": "http://localhost:4141/v1",
-        "default_model": "",
+        "default_model": "gpt-4o",
         "api_key": "ollama",
     }
 }

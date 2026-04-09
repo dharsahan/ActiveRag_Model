@@ -110,8 +110,9 @@ class ActiveRAGPipeline:
         query_lower = query.lower()
         return any(kw in query_lower for kw in _TIME_SENSITIVE_KEYWORDS)
 
-    def run(self, query: str, use_cache: bool = True) -> PipelineResult:
+    def run(self, query: str, use_cache: bool = True, memory: ConversationMemory | None = None) -> PipelineResult:
         """Execute the full Active RAG pipeline for the given *query*."""
+        active_memory = memory or self._memory
         try:
             # Check cache first
             if use_cache and self._cache:
@@ -147,9 +148,9 @@ class ActiveRAGPipeline:
                 ))
             
             # Update memory
-            if self._memory:
-                self._memory.add_user_message(query)
-                self._memory.add_assistant_message(result.answer.text)
+            if active_memory:
+                active_memory.add_user_message(query)
+                active_memory.add_assistant_message(result.answer.text)
             
             return result
             
@@ -171,13 +172,14 @@ class ActiveRAGPipeline:
                 path="error",
             )
 
-    def run_stream(self, query: str) -> Generator[str | PipelineResult, None, None]:
+    def run_stream(self, query: str, memory: ConversationMemory | None = None) -> Generator[str | PipelineResult, None, None]:
         """Execute pipeline with streaming response (falls back to sync if streaming fails)."""
+        active_memory = memory or self._memory
         try:
             # Get conversation context
             conversation_context = ""
-            if self._memory and self._memory.is_followup_question(query):
-                conversation_context = self._memory.get_conversation_summary()
+            if active_memory and active_memory.is_followup_question(query):
+                conversation_context = active_memory.get_conversation_summary()
             
             # Step 1: Confidence check
             self._progress_callback("Checking confidence...")
@@ -269,9 +271,9 @@ class ActiveRAGPipeline:
                         yield answer.text
             
             # Update memory
-            if self._memory:
-                self._memory.add_user_message(query)
-                self._memory.add_assistant_message(answer.text)
+            if active_memory:
+                active_memory.add_user_message(query)
+                active_memory.add_assistant_message(answer.text)
             
             # Yield final result
             yield PipelineResult(
@@ -289,12 +291,13 @@ class ActiveRAGPipeline:
                 path="error",
             )
 
-    def _run(self, query: str) -> PipelineResult:
+    def _run(self, query: str, memory: ConversationMemory | None = None) -> PipelineResult:
         """Internal pipeline logic."""
+        active_memory = memory or self._memory
         # Get conversation context for follow-ups
         conversation_context = ""
-        if self._memory and self._memory.is_followup_question(query):
-            conversation_context = self._memory.get_conversation_summary()
+        if active_memory and active_memory.is_followup_question(query):
+            conversation_context = active_memory.get_conversation_summary()
             logger.debug("Using conversation context for follow-up question")
         
         # ── Step 1: AI Model Confidence Check ────────────────────────

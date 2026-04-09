@@ -8,7 +8,7 @@ import re
 import time
 from typing import Callable, Generator, AsyncGenerator, Any
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 
 from active_rag.config import Config
 from active_rag.pipeline import PipelineResult
@@ -29,12 +29,17 @@ class AgenticOrchestrator:
     def __init__(self, config: Config | None = None, progress_callback: Callable[[str], None] | None = None) -> None:
         self._config = config or Config()
         self._progress_callback = progress_callback or (lambda _: None)
-        
+
         self._client = OpenAI(
             base_url=self._config.ollama_base_url,
             api_key=self._config.api_key,
         )
-        
+
+        self._async_client = AsyncOpenAI(
+            base_url=self._config.ollama_base_url,
+            api_key=self._config.api_key,
+        )
+
         # Initialize tools with shared resources
         from active_rag.vector_store import VectorStore
         shared_vector_store = VectorStore(self._config)
@@ -105,10 +110,11 @@ class AgenticOrchestrator:
         else:
             return f"Error: Unknown tool '{name}'"
 
-    def run(self, query: str, max_steps: int = 5) -> PipelineResult:
+    def run(self, query: str, max_steps: int = 5, memory: ConversationMemory | None = None) -> PipelineResult:
         """Run the agent loop synchronously until a final answer is produced."""
         # Use windowed memory history
-        messages = self._memory.get_context_messages()
+        active_memory = memory or self._memory
+        messages = active_memory.get_context_messages()
 
         # Enhanced system message for better formatting
         enhanced_system_msg = {
@@ -117,7 +123,7 @@ class AgenticOrchestrator:
                 "You are an advanced 'Refined Active RAG' Agent. You have access to a suite of tools "
                 "to provide accurate, up-to-date, and well-reasoned answers.\n\n"
                 "YOUR TOOLSET:\n"
-                "1. **web_browser**: Search and scrape the live internet. Use this for current events, fresh facts, or when your internal knowledge is insufficient. Everything you browse is automatically indexed.\n"
+                "1. **web_browser**: Search and scrape the live internet. Use this for current events, fresh facts, or when your internal knowledge is insufficient. You have full access to the brower you can navigate through the website freely like going to next page clicking btn , logging in and etc NOTE:you have full access to the browser .Everything you browse is automatically indexed.\n"
                 "2. **query_memory**: Search your long-term Vector Database (Neo4j) for previously learned facts and documents.\n"
                 "3. **graph_query**: Perform multi-hop reasoning over your Knowledge Graph (Neo4j). Use this to explore complex relationships between entities.\n"
                 "4. **store_memory**: Explicitly memorize a fact if the user asks you to 'remember' something or if you find a critical piece of info you want to save permanently.\n"
@@ -191,8 +197,8 @@ class AgenticOrchestrator:
         final_answer = self._post_process_response(final_answer)
 
         # Update memory with the exchange
-        self._memory.add_user_message(query)
-        self._memory.add_assistant_message(final_answer)
+        active_memory.add_user_message(query)
+        active_memory.add_assistant_message(final_answer)
 
         # Continuous Learning: Index the interaction
         self._index_interaction(query, final_answer)
@@ -202,10 +208,11 @@ class AgenticOrchestrator:
             path="agent",
         )
 
-    async def run_async(self, query: str, max_steps: int = 5) -> PipelineResult:
+    async def run_async(self, query: str, max_steps: int = 5, memory: ConversationMemory | None = None) -> PipelineResult:
         """Run the agent loop asynchronously until a final answer is produced."""
         # Use windowed memory history
-        messages = self._memory.get_context_messages()
+        active_memory = memory or self._memory
+        messages = active_memory.get_context_messages()
 
         # Enhanced system message for better formatting
         enhanced_system_msg = {
@@ -214,7 +221,7 @@ class AgenticOrchestrator:
                 "You are an advanced 'Refined Active RAG' Agent. You have access to a suite of tools "
                 "to provide accurate, up-to-date, and well-reasoned answers.\n\n"
                 "YOUR TOOLSET:\n"
-                "1. **web_browser**: Search and scrape the live internet. Use this for current events, fresh facts, or when your internal knowledge is insufficient. Everything you browse is automatically indexed.\n"
+                "1. **web_browser**: Search and scrape the live internet. Use this for current events, fresh facts, or when your internal knowledge is insufficient.You have full access to the brower you can navigate through the website freely like going to next page clicking btn , logging in and etc NOTE:you have full access to the browser . Everything you browse is automatically indexed.\n"
                 "2. **query_memory**: Search your long-term Vector Database (Neo4j) for previously learned facts and documents.\n"
                 "3. **graph_query**: Perform multi-hop reasoning over your Knowledge Graph (Neo4j). Use this to explore complex relationships between entities.\n"
                 "4. **store_memory**: Explicitly memorize a fact if the user asks you to 'remember' something or if you find a critical piece of info you want to save permanently.\n"
@@ -243,7 +250,7 @@ class AgenticOrchestrator:
         for step in range(max_steps):
             self._progress_callback(f"Agent reasoning (step {step+1})...")
 
-            response = self._client.chat.completions.create(
+            response = await self._async_client.chat.completions.create(
                 model=self._config.model_name,
                 messages=messages,
                 tools=self.tools_schema,
@@ -289,8 +296,8 @@ class AgenticOrchestrator:
         final_answer = self._post_process_response(final_answer)
 
         # Update memory with the exchange
-        self._memory.add_user_message(query)
-        self._memory.add_assistant_message(final_answer)
+        active_memory.add_user_message(query)
+        active_memory.add_assistant_message(final_answer)
 
         # Continuous Learning: Index the interaction
         self._index_interaction(query, final_answer)
@@ -300,7 +307,7 @@ class AgenticOrchestrator:
             path="agent",
         )
 
-    async def run_stream(self, query: str) -> AsyncGenerator[dict[str, Any], None]:
+    async def run_stream(self, query: str, memory: ConversationMemory | None = None) -> AsyncGenerator[dict[str, Any], None]:
         """Streaming agent implementation yielding tokens and metadata."""
         # Initial metadata
         yield {
@@ -310,7 +317,8 @@ class AgenticOrchestrator:
             "reasoning": "Autonomous agent loop started."
         }
 
-        messages = self._memory.get_context_messages()
+        active_memory = memory or self._memory
+        messages = active_memory.get_context_messages()
         # Enhanced system message for better formatting
         enhanced_system_msg = {
             "role": "system",
@@ -318,7 +326,7 @@ class AgenticOrchestrator:
                 "You are an advanced 'Refined Active RAG' Agent. You have access to a suite of tools "
                 "to provide accurate, up-to-date, and well-reasoned answers.\n\n"
                 "YOUR TOOLSET:\n"
-                "1. **web_browser**: Search and scrape the live internet. Use this for current events, fresh facts, or when your internal knowledge is insufficient. Everything you browse is automatically indexed.\n"
+                "1. **web_browser**: Search and scrape the live internet. Use this for current events, fresh facts, or when your internal knowledge is insufficient.You have full access to the brower you can navigate through the website freely like going to next page clicking btn , logging in and etc NOTE:you have full access to the browser . Everything you browse is automatically indexed.\n"
                 "2. **query_memory**: Search your long-term Vector Database (Neo4j) for previously learned facts and documents.\n"
                 "3. **graph_query**: Perform multi-hop reasoning over your Knowledge Graph (Neo4j). Use this to explore complex relationships between entities.\n"
                 "4. **store_memory**: Explicitly memorize a fact if the user asks you to 'remember' something or if you find a critical piece of info you want to save permanently.\n"
@@ -348,7 +356,7 @@ class AgenticOrchestrator:
         for step in range(max_steps):
             self._progress_callback(f"Agent reasoning (step {step+1})...")
 
-            response = self._client.chat.completions.create(
+            response = await self._async_client.chat.completions.create(
                 model=self._config.model_name,
                 messages=messages,
                 tools=self.tools_schema,
@@ -360,7 +368,7 @@ class AgenticOrchestrator:
             collected_content = ""
             tool_calls = []
 
-            for chunk in response:
+            async for chunk in response:
                 if not chunk.choices:
                     continue
 
@@ -451,8 +459,8 @@ class AgenticOrchestrator:
         final_answer = self._post_process_response(final_answer)
 
         # Update memory
-        self._memory.add_user_message(query)
-        self._memory.add_assistant_message(final_answer)
+        active_memory.add_user_message(query)
+        active_memory.add_assistant_message(final_answer)
 
         # Continuous Learning: Index the interaction
         self._index_interaction(query, final_answer)

@@ -89,10 +89,11 @@ class UltimateActiveRAGPipeline:
             except Exception as e:
                 logger.warning(f"Graph backend unavailable: {e}")
 
-    def run(self, query: str) -> PipelineResult:
+    def run(self, query: str, memory: ConversationMemory | None = None) -> PipelineResult:
         """Execute the ultimate RAG pipeline with automatic knowledge expansion."""
         self._progress_callback("🧠 Starting ultimate knowledge search...")
 
+        active_memory = memory or self._memory
         # Track what we discover
         knowledge_updates = KnowledgeUpdateResult()
         search_path = []
@@ -266,7 +267,7 @@ class UltimateActiveRAGPipeline:
         context_text = "\n\n".join(final_context) if final_context else ""
 
         # Build conversation messages
-        messages = self._memory.get_context_messages()
+        messages = active_memory.get_context_messages()
 
         system_message = {
             "role": "system",
@@ -307,8 +308,8 @@ class UltimateActiveRAGPipeline:
             answer_text = f"Error generating answer: {e}"
 
         # Update memory
-        self._memory.add_user_message(query)
-        self._memory.add_assistant_message(answer_text)
+        active_memory.add_user_message(query)
+        active_memory.add_assistant_message(answer_text)
 
         # Determine final path
         path_components = []
@@ -341,10 +342,11 @@ class UltimateActiveRAGPipeline:
             diagnostics=diagnostics,
         )
 
-    def run_stream(self, query: str) -> Generator[str | PipelineResult, None, None]:
+    def run_stream(self, query: str, memory: ConversationMemory | None = None) -> Generator[str | PipelineResult, None, None]:
         """Streaming version of the ultimate pipeline."""
         yield "🧠 Starting ultimate knowledge search..."
 
+        active_memory = memory or self._memory
         # Track what we discover
         knowledge_updates = KnowledgeUpdateResult()
         search_path = []
@@ -487,7 +489,7 @@ class UltimateActiveRAGPipeline:
             context_text = "\n\n".join(final_context) if final_context else ""
 
             # Build conversation messages
-            messages = self._memory.get_context_messages()
+            messages = active_memory.get_context_messages()
 
             system_message = {
                 "role": "system",
@@ -536,8 +538,8 @@ class UltimateActiveRAGPipeline:
                 yield answer_text
 
             # Update memory
-            self._memory.add_user_message(query)
-            self._memory.add_assistant_message(answer_text)
+            active_memory.add_user_message(query)
+            active_memory.add_assistant_message(answer_text)
 
             # Determine final path
             path_components = []

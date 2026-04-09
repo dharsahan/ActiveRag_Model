@@ -81,16 +81,18 @@ class HybridRAGPipeline:
                 logger.warning(f"Graph backend unavailable: {e}")
                 self._graph_ops = None
 
-    def run(self, query: str, explain: bool = False) -> PipelineResult:
+    def run(self, query: str, explain: bool = False, memory: ConversationMemory | None = None) -> PipelineResult:
         """Execute hybrid retrieval and generate an answer.
 
         Args:
             query: The user's question.
             explain: If True, attach reasoning explanations to diagnostics.
+            memory: Optional session memory.
 
         Returns:
             PipelineResult with answer, path info, and citations.
         """
+        active_memory = memory or self._memory
         # 1. Classify
         self._progress_callback("Classifying query...")
         classification = self._classifier.classify(query)
@@ -119,12 +121,12 @@ class HybridRAGPipeline:
 
         # 5. Generate answer
         self._progress_callback("Generating answer...")
-        answer_text = self._generate_answer(query, combined)
+        answer_text = self._generate_answer(query, combined, active_memory)
         citations = self._extract_citations(vector_chunks, graph_chunks)
 
         # Update memory
-        self._memory.add_user_message(query)
-        self._memory.add_assistant_message(answer_text)
+        active_memory.add_user_message(query)
+        active_memory.add_assistant_message(answer_text)
 
         path_label = f"hybrid_{combined.strategy_used}"
         diagnostics: dict = {}
@@ -156,17 +158,19 @@ class HybridRAGPipeline:
             diagnostics=diagnostics,
         )
 
-    def run_stream(self, query: str, explain: bool = False) -> Generator[str | PipelineResult, None, None]:
+    def run_stream(self, query: str, explain: bool = False, memory: ConversationMemory | None = None) -> Generator[str | PipelineResult, None, None]:
         """Execute hybrid retrieval with streaming response.
 
         Args:
             query: The user's question.
             explain: If True, attach reasoning explanations to diagnostics.
+            memory: Optional session memory.
 
         Yields:
             str: Progress tokens and metadata
             PipelineResult: Final result
         """
+        active_memory = memory or self._memory
         try:
             # 1. Classify
             self._progress_callback("Classifying query...")
@@ -203,7 +207,7 @@ class HybridRAGPipeline:
             # 5. Generate answer with streaming
             yield "Generating answer..."
             context = combined.context_text
-            messages = self._memory.get_context_messages()
+            messages = active_memory.get_context_messages()
 
             system_content = (
                 "You are a helpful assistant with access to a hybrid knowledge system. "
@@ -258,8 +262,8 @@ class HybridRAGPipeline:
             citations = self._extract_citations(vector_chunks, graph_chunks)
 
             # Update memory
-            self._memory.add_user_message(query)
-            self._memory.add_assistant_message(answer_text)
+            active_memory.add_user_message(query)
+            active_memory.add_assistant_message(answer_text)
 
             path_label = f"hybrid_{combined.strategy_used}"
             diagnostics: dict = {}
@@ -355,11 +359,11 @@ class HybridRAGPipeline:
             logger.warning(f"Graph retrieval failed: {e}")
             return []
 
-    def _generate_answer(self, query: str, combined: CombinedResult) -> str:
+    def _generate_answer(self, query: str, combined: CombinedResult, memory: ConversationMemory) -> str:
         """Generate an answer using the LLM with combined context."""
         context = combined.context_text
 
-        messages = self._memory.get_context_messages()
+        messages = memory.get_context_messages()
 
         system_content = (
             "You are a helpful assistant with access to a hybrid knowledge system. "
