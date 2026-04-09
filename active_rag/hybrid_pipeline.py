@@ -315,7 +315,7 @@ class HybridRAGPipeline:
             chunks.append(SourcedChunk(
                 content=r.content,
                 source="vector",
-                score=max(0.0, 1.0 - r.score),  # ChromaDB distance → similarity
+                score=max(0.0, min(1.0, r.score)),
                 metadata={"source_url": r.source_url},
             ))
         return chunks

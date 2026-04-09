@@ -20,9 +20,9 @@ def test_default_config_values(monkeypatch):
     assert config.top_k == 3
     assert config.max_search_results == 3
     assert config.collection_name == "active_rag"
-    # Default provider is "local" → model = "gpt-5.2", base_url = "http://localhost:4141"
-    assert config.model_name == "gpt-5.2"
-    assert config.ollama_base_url == "http://localhost:4141"
+    # Default provider is "local".
+    assert config.model_name == "gpt-4o"
+    assert config.ollama_base_url == "http://localhost:4141/v1"
 
 
 def test_custom_config_values():

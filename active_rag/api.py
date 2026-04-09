@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
@@ -26,6 +26,7 @@ from active_rag.dependencies import (
     SessionManager,
     ResourceManager,
     GraphResourceManager,
+    verify_api_key,
 )
 
 # Import routers
@@ -41,6 +42,16 @@ from active_rag.routers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _fresh_router(template: APIRouter) -> APIRouter:
+    """Create a new APIRouter instance from a router template.
+
+    Register functions attach endpoints directly on the passed router, so
+    create_app must use fresh router instances to avoid duplicated routes when
+    create_app() is called multiple times (e.g., in tests).
+    """
+    return APIRouter(prefix=template.prefix, tags=list(template.tags))
 
 
 def create_app(config: Config | None = None) -> FastAPI:
@@ -79,57 +90,58 @@ def create_app(config: Config | None = None) -> FastAPI:
     sessions = SessionManager(cfg)
     resources = ResourceManager(cfg)
     graph_resources = GraphResourceManager(cfg)
+    auth_dependencies = [Depends(verify_api_key)]
 
     # --- Register all routers ---
 
     # 1. Query
-    query_r = query_router.router
+    query_r = _fresh_router(query_router.router)
     query_router.register(query_r, sessions, resources)
-    app.include_router(query_r)
+    app.include_router(query_r, dependencies=auth_dependencies)
 
     # 2. Ingestion
-    ingest_r = ingestion_router.router
+    ingest_r = _fresh_router(ingestion_router.router)
     ingestion_router.register(ingest_r, resources)
-    app.include_router(ingest_r)
+    app.include_router(ingest_r, dependencies=auth_dependencies)
 
     # 3. Knowledge Base
-    kb_r = kb_router.router
+    kb_r = _fresh_router(kb_router.router)
     kb_router.register(kb_r, resources, cfg)
-    app.include_router(kb_r)
+    app.include_router(kb_r, dependencies=auth_dependencies)
 
     # 4. Knowledge Graph
-    graph_r = graph_router.router
+    graph_r = _fresh_router(graph_router.router)
     graph_router.register(graph_r, graph_resources)
-    app.include_router(graph_r)
+    app.include_router(graph_r, dependencies=auth_dependencies)
 
     # 5. NLP Pipeline
-    nlp_r = nlp_router.router
+    nlp_r = _fresh_router(nlp_router.router)
     nlp_router.register(nlp_r, graph_resources)
-    app.include_router(nlp_r)
+    app.include_router(nlp_r, dependencies=auth_dependencies)
 
     # 6. Reasoning & Analytics
-    reasoning_r = reasoning_router.router
+    reasoning_r = _fresh_router(reasoning_router.router)
     reasoning_router.register(reasoning_r, graph_resources)
-    app.include_router(reasoning_r)
+    app.include_router(reasoning_r, dependencies=auth_dependencies)
 
     # 7. Evaluation
-    eval_r = evaluation_router.router
+    eval_r = _fresh_router(evaluation_router.router)
     evaluation_router.register(eval_r, graph_resources)
-    app.include_router(eval_r)
+    app.include_router(eval_r, dependencies=auth_dependencies)
 
     # 8. System
-    system_r = system_router.router
+    system_r = _fresh_router(system_router.router)
     system_router.register(system_r, sessions, resources, graph_resources, cfg)
-    app.include_router(system_r)
+    app.include_router(system_r, dependencies=auth_dependencies)
 
     # --- Config endpoints (kept inline as they're simple) ---
 
-    @app.get("/api/v1/config", tags=["Config"])
+    @app.get("/api/v1/config", tags=["Config"], dependencies=auth_dependencies)
     async def get_config():
         """View current configuration."""
         return {k: v for k, v in cfg.__dict__.items() if not k.startswith("_")}
 
-    @app.patch("/api/v1/config", tags=["Config"])
+    @app.patch("/api/v1/config", tags=["Config"], dependencies=auth_dependencies)
     async def update_config(
         top_k: int | None = None,
         confidence_threshold: float | None = None,

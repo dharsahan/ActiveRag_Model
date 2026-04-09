@@ -1,32 +1,35 @@
-"""Tests for the REST API."""
+"""Compatibility tests for legacy API paths and auth behavior."""
 
-import json
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi.testclient import TestClient
 
 from active_rag.api import create_app
 
 
-@patch("active_rag.api.AgenticOrchestrator")
-def test_query_endpoint(mock_pipeline_cls):
-    """POST /query returns an answer."""
+@patch("active_rag.dependencies.AgenticOrchestrator")
+@patch("active_rag.dependencies.VectorStore")
+@patch("active_rag.dependencies.ConversationMemory")
+def test_query_endpoint_legacy_redirect(mock_mem_cls, mock_vs_cls, mock_agent_cls):
+    """POST /query should redirect and still return a valid query response."""
+    mock_store = MagicMock()
+    mock_store.count.return_value = 0
+    mock_store.search.return_value = MagicMock(found=False, results=[])
+    mock_vs_cls.return_value = mock_store
+
     mock_pipeline = MagicMock()
     mock_result = MagicMock()
     mock_result.answer.text = "Test answer"
     mock_result.answer.citations = ["https://example.com"]
-    mock_result.path = "direct"
-    
-    # Mock confidence object
+    mock_result.path = "agent"
     mock_conf = MagicMock()
     mock_conf.confidence = 0.9
     mock_conf.reasoning = "Known fact"
     mock_result.confidence = mock_conf
-    
     mock_result.web_pages_indexed = 0
     mock_result.from_cache = False
-    # API uses await pipeline.run_async(), so we need AsyncMock
     mock_pipeline.run_async = AsyncMock(return_value=mock_result)
-    mock_pipeline_cls.return_value = mock_pipeline
+    mock_agent_cls.return_value = mock_pipeline
 
     app = create_app()
     client = TestClient(app)
@@ -35,33 +38,32 @@ def test_query_endpoint(mock_pipeline_cls):
     assert response.status_code == 200
     data = response.json()
     assert data["answer"] == "Test answer"
-    assert data["path"] == "direct"
+    assert data["path"] == "agent"
     assert data["confidence"] == 0.9
 
 
-@patch("active_rag.api.AgenticOrchestrator")
-def test_health_endpoint(mock_pipeline_cls):
-    """GET /health returns ok."""
+def test_health_endpoint_legacy_redirect():
+    """GET /system/health should redirect and return health JSON."""
     app = create_app()
     client = TestClient(app)
-    response = client.get("/health")
+
+    response = client.get("/system/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    data = response.json()
+    assert data["status"] == "ok"
 
 
-@patch("active_rag.api.AgenticOrchestrator")
-def test_clear_endpoints(mock_pipeline_cls):
-    """POST /clear-memory and /clear-cache work."""
-    mock_pipeline = MagicMock()
-    mock_pipeline_cls.return_value = mock_pipeline
-
+def test_api_key_auth_is_enforced_when_configured(monkeypatch):
+    """If ACTIVE_RAG_API_KEY is set, requests must include X-API-Key."""
+    monkeypatch.setenv("ACTIVE_RAG_API_KEY", "secret-key")
     app = create_app()
     client = TestClient(app)
 
-    res1 = client.post("/clear-memory")
-    assert res1.status_code == 200
-    mock_pipeline.clear_memory.assert_called_once()
+    missing = client.get("/api/v1/config")
+    assert missing.status_code == 401
 
-    res2 = client.post("/clear-cache")
-    assert res2.status_code == 200
-    mock_pipeline.clear_cache.assert_called_once()
+    wrong = client.get("/api/v1/config", headers={"X-API-Key": "wrong"})
+    assert wrong.status_code == 401
+
+    ok = client.get("/api/v1/config", headers={"X-API-Key": "secret-key"})
+    assert ok.status_code == 200

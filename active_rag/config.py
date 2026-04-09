@@ -20,6 +20,25 @@ class Config:
     model_name: str | None = None
     api_key: str | None = None
 
+    # Cache settings
+    cache_dir: str | None = None
+
+    # Legacy compatibility fields from pre-Neo4j releases.
+    # These are kept so older tests/scripts can still construct Config.
+    collection_name: str | None = None
+    chroma_persist_dir: str | None = None
+
+    # Vector store settings (Neo4j-backed)
+    vector_index_name: str = field(
+        default_factory=lambda: os.getenv(
+            "VECTOR_INDEX_NAME",
+            os.getenv("COLLECTION_NAME", "active_rag"),
+        )
+    )
+    top_k: int = field(
+        default_factory=lambda: int(os.getenv("TOP_K", "3"))
+    )
+
     def __post_init__(self) -> None:
         from active_rag.providers import get_provider_config
         cfg = get_provider_config(self.provider)
@@ -38,20 +57,25 @@ class Config:
                 default_key = cfg.get("api_key", "ollama")
             self.api_key = os.getenv("LLM_API_KEY", default_key)
 
+        if self.collection_name is None:
+            self.collection_name = os.getenv("COLLECTION_NAME", self.vector_index_name)
+
+        # If legacy collection_name is explicitly set, mirror it to vector index.
+        if self.collection_name:
+            self.vector_index_name = self.collection_name
+
+        if self.chroma_persist_dir is None:
+            self.chroma_persist_dir = os.getenv("CHROMA_PERSIST_DIR", ".cache/chroma")
+
+        if self.cache_dir is None:
+            self.cache_dir = os.getenv("CACHE_DIR", ".cache")
+
     # Confidence threshold (0.0–1.0). Scores at or above this value are
     # considered "high confidence" and skip RAG retrieval.
     confidence_threshold: float = field(
         default_factory=lambda: float(
             os.getenv("CONFIDENCE_THRESHOLD", "0.7")
         )
-    )
-
-    # Vector store settings (Neo4j-backed)
-    vector_index_name: str = field(
-        default_factory=lambda: os.getenv("VECTOR_INDEX_NAME", "active_rag")
-    )
-    top_k: int = field(
-        default_factory=lambda: int(os.getenv("TOP_K", "3"))
     )
 
     # Web search settings

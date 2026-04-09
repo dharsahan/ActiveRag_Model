@@ -6,9 +6,10 @@ import os
 import logging
 from typing import List, Optional
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from active_rag.dependencies import ResourceManager
 
@@ -37,7 +38,7 @@ class BatchIngestRequest(BaseModel):
 
 class UrlIngestRequest(BaseModel):
     url: str
-    max_pages: int = 1
+    max_pages: int = Field(default=1, ge=1, le=10)
 
 
 def register(r: APIRouter, resources: ResourceManager):
@@ -48,7 +49,13 @@ def register(r: APIRouter, resources: ResourceManager):
         """Upload a file (PDF, TXT, MD, DOCX) for ingestion."""
         temp_dir = Path("data/uploads")
         temp_dir.mkdir(parents=True, exist_ok=True)
-        file_path = temp_dir / file.filename
+
+        original_name = file.filename or "upload"
+        safe_name = Path(original_name).name
+        if safe_name in {"", ".", ".."}:
+            safe_name = f"upload-{uuid4().hex}"
+
+        file_path = temp_dir / safe_name
 
         with open(file_path, "wb") as buffer:
             buffer.write(await file.read())
@@ -64,7 +71,8 @@ def register(r: APIRouter, resources: ResourceManager):
 
             return {
                 "status": "success",
-                "filename": file.filename,
+                "filename": safe_name,
+                "original_filename": original_name,
                 "chunks": len(chunk_ids),
                 "ids": chunk_ids[:10],
             }
@@ -114,7 +122,8 @@ def register(r: APIRouter, resources: ResourceManager):
             from active_rag.web_search import WebSearcher
 
             searcher = WebSearcher(resources.config)
-            pages = searcher.scrape_urls([req.url])
+            page = await searcher.scrape_async(req.url)
+            pages = [page] if page is not None else []
 
             if not pages:
                 raise HTTPException(status_code=400, detail="Failed to scrape URL")

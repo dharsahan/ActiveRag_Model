@@ -40,7 +40,13 @@ class ResponseCache:
     
     def __init__(self, config: Config, cache_dir: str | None = None) -> None:
         self._config = config
-        cache_path = cache_dir or str(Path(config.chroma_persist_dir).parent / ".cache")
+        if cache_dir:
+            cache_path = cache_dir
+        elif getattr(config, "cache_dir", None):
+            cache_path = str(config.cache_dir)
+        else:
+            legacy_base = getattr(config, "chroma_persist_dir", ".cache/chroma")
+            cache_path = str(Path(legacy_base).parent / ".cache")
         self._cache = Cache(cache_path)
         self._ttl = 3600 * 24  # 24 hours default TTL
     

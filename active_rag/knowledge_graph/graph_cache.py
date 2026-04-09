@@ -86,7 +86,8 @@ class GraphCache:
         for k in sorted(params.keys()):
             parts.append(f"{k}={params[k]}")
         raw = "|".join(parts)
-        return hashlib.md5(raw.encode()).hexdigest()
+        digest = hashlib.md5(raw.encode()).hexdigest()
+        return f"{query_type}|{digest}"
 
     def get(self, query_type: str, **params) -> Optional[Any]:
         """Look up a cached result.
@@ -158,7 +159,7 @@ class GraphCache:
             return count
 
         # Partial invalidation by key prefix
-        prefix = hashlib.md5(query_type.encode()).hexdigest()[:8]
+        prefix = f"{query_type}|"
         to_remove = [k for k in self._cache if k.startswith(prefix)]
         for k in to_remove:
             del self._cache[k]

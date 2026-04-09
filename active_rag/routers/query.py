@@ -7,13 +7,11 @@ import asyncio
 import logging
 from typing import List, Optional, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from active_rag.dependencies import (
-    SessionManager, ResourceManager, verify_api_key,
-)
+from active_rag.dependencies import SessionManager, ResourceManager
 
 logger = logging.getLogger(__name__)
 
